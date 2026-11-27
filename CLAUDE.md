@@ -4,7 +4,7 @@
 
 - 純靜態：`index.html`（CSS）＋`data.js`（計算引擎 `window.LQB`，node 可 require）＋`app.js`（畫面）＋`watermark.js`（`TOOL_WATERMARK` 馬克老師浮水印，列印用）＋`manual.html`＋PWA。
 - 本機預覽 port **8909**（`.claude/launch.json` 的 `lecture-quiz-builder`）。visitor-badge `m255525.lecturequizbuilder`（手冊 `.manual`）。
-- 尚未上線。上線後在這裡記網址與日期；改版要升 `service-worker.js` 的 `CACHE_NAME` 再 push。
+- **2026-11-27 已上線** <https://m255525.github.io/lecture-quiz-builder/>（`publish.mjs`：建 repo＋push → 開 Pages → 補 master 部署規則 → workflow_dispatch）。程式牆 `REPO_META`、github-dashboard、AI 工具導航已登記。改版後升 `service-worker.js` 的 `CACHE_NAME` 再 push。
 
 ## 規則與流程
 - 檔案：`data.js`（引擎，全部純函式）、`samples.js`（虛構範例講義，測試也用）、`io.js`（**複製自 `teacher-classroom-helper/io.js` 正本**，只改命名空間 `LQBIO`＋加 `readPptx`）、`pdftext.js`（`LQBPDF`：pdf.js 3.11.174 從 cdnjs 載、worker 轉 Blob、cMaps 走 jsdelivr，逐頁取字＋`renderJpeg` 給 AI 看圖）、`course-link.js`（正本在 `../course-link`，改了在那邊跑 `node sync.mjs --write`）。
