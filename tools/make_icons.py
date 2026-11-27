@@ -2,7 +2,7 @@
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-MAIN, PAPER, INK, GLYPH = '#3B2A1E', '#FFFCF5', '#3B2A1E', '卷'
+MAIN, PAPER, INK, GLYPH = '#22314A', '#FBF7EC', '#B7322C', '卷'
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'icons')
 os.makedirs(out, exist_ok=True)
 FONT = None
@@ -16,8 +16,11 @@ def draw(size, pad):
     d = ImageDraw.Draw(im)
     x0, x1 = pad * s, (1 - pad) * s
     w = x1 - x0
-    d.rounded_rectangle([x0, x0, x1, x1], radius=w * .18, fill=PAPER)
-    font = ImageFont.truetype(FONT, int(w * .62)) if FONT else ImageFont.load_default()
+    d.rounded_rectangle([x0, x0, x1, x1], radius=w * .08, fill=PAPER)
+    for k in range(6):  # 考卷橫線
+        y = x0 + w * (.2 + k * .13); d.line([x0 + w * .08, y, x1 - w * .08, y], fill='#D9E0EA', width=max(2, int(w * .012)))
+    m = w * .2; d.rectangle([x0 + m, x0 + m, x1 - m, x1 - m], outline=INK, width=int(w * .045))  # 紅色印章框
+    font = ImageFont.truetype(FONT, int(w * .44)) if FONT else ImageFont.load_default()
     d.text((s / 2, s / 2), GLYPH, fill=INK, font=font, anchor='mm')
     return im.resize((size, size), Image.LANCZOS)
 
