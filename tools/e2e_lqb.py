@@ -36,7 +36,7 @@ try:
             elif s == 'OLD': d = {'valid': False, 'reason': 'expired'}
             else: d = {'valid': False, 'reason': 'serial_not_found'}
             route.fulfill(status=200, content_type='application/json', body=json.dumps(d))
-        ctx.route('https://script.google.com/macros/s/AKfycbw2qz-sTKRVkVHGQZLTj73xlJdDiaHG8eNexjAN9XWMrly5BnxVcP8dC0qE3kADHeIl/exec*', fake_license)
+        ctx.route('https://script.google.com/macros/s/AKfycbxMelSTbpI-Mx2mKMLSU7XZVMY2Wcew1xicX2cNYkw_ETN6yA889uCV7iRNs4Rl0Nln/exec*', fake_license)
         pg.goto(BASE); pg.wait_for_timeout(700)
         ok('閘門擋住工具', pg.locator('#entryGate:not(.hidden)').count() == 1)
         pg.fill('#entryGateSerial', 'NOPE'); pg.click('#btnEntryGateConfirm'); pg.wait_for_timeout(300)

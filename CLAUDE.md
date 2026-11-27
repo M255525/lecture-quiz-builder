@@ -29,7 +29,7 @@
 - 原則：AI 只做解說與文字，數字與判斷一律由 `data.js` 規則決定；每個 AI 功能都要有「📋 複製提示詞」（沒金鑰也能用）。
 
 ## 登入序號閘門（六件套）
-- 序號表分頁「講義出題試卷工坊」，驗證打 `https://script.google.com/macros/s/AKfycbw2qz-sTKRVkVHGQZLTj73xlJdDiaHG8eNexjAN9XWMrly5BnxVcP8dC0qE3kADHeIl/exec`，請求帶 `sheet`（驗證、背景重驗、登出 release 都要帶）。**分頁要自己在試算表建好**（表頭：序號／開始日期／結束日期，選填人數限制），新部署的 Apps Script 要請使用者本人授權一次。
+- 序號表在**試算表「新增講師工具」**（`1DIefg-rHHnhFK1GMuWZpDdU_Knbh1IPJtIl5lZW8HeY`，不是「辦訓相關」）分頁「講義出題試卷工坊」。後端是綁在這份試算表的 Apps Script `gas/`（`Code.js` 複製自訓練證書產生器的 gas，只改預設 `SHEET_NAME`；scriptId 見 `gas/.clasp.json`，改了 `clasp push` 後要 `clasp create-deployment -i <部署 id>` 更新同一個網址）。之後其他講師工具可以共用這支，請求帶 `sheet`。驗證打 `https://script.google.com/macros/s/AKfycbxMelSTbpI-Mx2mKMLSU7XZVMY2Wcew1xicX2cNYkw_ETN6yA889uCV7iRNs4Rl0Nln/exec`，請求帶 `sheet`（驗證、背景重驗、登出 release 都要帶）。**分頁要自己在試算表建好**（表頭：序號／開始日期／結束日期，選填人數限制），新部署的 Apps Script 要請使用者本人授權一次。
 - `#entryGate` 開啟 fail-closed，登入後每 20 分鐘背景重驗；序號存 `lectureQuizBuilderEntrySerial`（不用 `lqb.` 前綴，清資料不登出）；⚙「🔑 登入序號」可登出；上方 `#licTop` 顯示到期日。首訪警語在第一次解鎖後才跳。
 - e2e 用 `ctx.route` 假造授權回應（GOOD 有效、OLD 過期、其他查無），不碰真的試算表。上線前記得在 github-dashboard `LICENSED_REPOS` 與 AI 工具導航第 6 欄標需序號。
 

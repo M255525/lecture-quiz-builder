@@ -719,10 +719,10 @@ function initMarquee(){
 }
 
 /* ---------- 登入序號閘門（複製自課程招生海報產生器／訓練證書產生器） ----------
-   序號在試算表分頁「講義出題試卷工坊」，打共用的 Apps Script，請求帶 sheet 指定分頁（後端支援 payload.sheet）。
+   序號在試算表「新增講師工具」的分頁「講義出題試卷工坊」，打綁在那份試算表的 Apps Script（gas/，2026-11-27 部署），請求帶 sheet 指定分頁。
    開啟時 fail-closed：驗證沒通過就整個工具都不能用。已登入後每 20 分鐘背景重驗，只有連線失敗或 server_error 不上鎖。
    序號存 lectureQuizBuilderEntrySerial（刻意不用 lqb. 前綴，⚙ 清除全部資料不會登出）。純前端閘門，懂 DevTools 的人可移除遮罩，已知取捨。 */
-var LICENSE_CHECK_URL = 'https://script.google.com/macros/s/AKfycbw2qz-sTKRVkVHGQZLTj73xlJdDiaHG8eNexjAN9XWMrly5BnxVcP8dC0qE3kADHeIl/exec';
+var LICENSE_CHECK_URL = 'https://script.google.com/macros/s/AKfycbxMelSTbpI-Mx2mKMLSU7XZVMY2Wcew1xicX2cNYkw_ETN6yA889uCV7iRNs4Rl0Nln/exec';
 var LICENSE_SHEET = '講義出題試卷工坊';
 var SERIAL_KEY = 'lectureQuizBuilderEntrySerial', CLIENT_KEY = 'lectureQuizBuilderEntryClientId', RECHECK_MS = 20 * 60 * 1000;
 var FREE_SERIAL = 'FLf9M6zAX8pe';   // 公開在登入頁的免費試用序號；'' 就不顯示
