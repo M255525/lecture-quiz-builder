@@ -207,6 +207,22 @@ try:
         pg.set_input_files('#restoreFile', path); pg.wait_for_timeout(300)
         ok('從備份還原', pg.evaluate("window._tool.S.bank.length") == n)
 
+        # 清理舊資料
+        pg.click('#modalBox [data-act=close]') if pg.locator('#modal.show').count() else None
+        pg.click('.bar [data-act=clean]')
+        ok('清理視窗：講義預設勾選、已審題目預設不勾', pg.is_checked('[data-clean=docs]') and not pg.is_checked('[data-clean=ok]'))
+        pg.check('[data-clean=ok]')
+        with pg.expect_download() as dl: pg.click('[data-act=cleanYes]')
+        ok('清理前先下載備份', dl.value.suggested_filename.endswith('.json'))
+        pg.wait_for_timeout(200)
+        ok('清理後講義、題庫、定案都清空', pg.evaluate("window._tool.S.docs.length === 0 && window._tool.S.bank.length === 0 && !window._tool.S.cfg.fin && window._tool.S.cfg.paper.ids.length === 0"))
+        ok('清理後設定保留', pg.evaluate("window._tool.S.cfg.paper.nVer") == 2)
+        pg.click('[data-act=settings]')
+        if pg.locator('#modalBox details[data-sec=data][open]').count() == 0: pg.click('#modalBox details[data-sec=data] > summary')
+        pg.set_input_files('#restoreFile', path); pg.wait_for_timeout(300)
+        pg.click('.bar [data-act=clean]'); pg.uncheck('#cleanBak'); pg.click('[data-act=cleanYes]'); pg.wait_for_timeout(200)
+        ok('只清講義與待審，已審題目留著', pg.evaluate("window._tool.S.docs.length === 0 && window._tool.S.bank.length === %d" % n))
+
         # ---------- AI 設定 ----------
         pg.click('[data-act=settings]')
         if pg.locator('#modalBox details[data-sec=ai][open]').count() == 0: pg.click('#modalBox details[data-sec=ai] > summary')

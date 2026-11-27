@@ -63,7 +63,7 @@ function selPages(){
 function render(){
   var licTop = '<button class="ibtn lictop" id="licTop" data-act="settings" hidden></button>';
   var h = '<div class="bar"><h1><span class="seal">卷</span>講義出題試卷工坊<small>多份講義 PDF → 出題審題 → A/B 卷試卷 → Google 表單 → 試題分析</small></h1>' +
-    licTop + '<a class="ibtn noprint" href="manual.html">📖 操作手冊</a><button class="ibtn" data-act="settings" aria-label="常用設定">⚙</button></div>' +
+    licTop + '<button class="ibtn" data-act="clean">🧹 清理舊資料</button><a class="ibtn noprint" href="manual.html">📖 操作手冊</a><button class="ibtn" data-act="settings" aria-label="常用設定">⚙</button></div>' +
     '<p class="warn-line">題目由規則或 AI 產生，須由講師審題後使用；講義與教材的著作權請自行確認<button data-act="warn">⚠ 使用警語</button></p>' +
     '<nav class="tabs" role="tablist">' + TABS.map(function(t){ return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (V.tab === t[0]) + '">' + t[1] + '<span class="tcount" id="tc-' + t[0] + '"></span></button>'; }).join('') + '</nav>' +
     TABS.map(function(t){ return '<section class="panel" data-p="' + t[0] + '" id="panel-' + t[0] + '"' + (V.tab === t[0] ? '' : ' hidden') + '></section>'; }).join('') +
@@ -113,7 +113,7 @@ function srcHTML(){
             (p.scan && d.kind === 'pdf' && V.files[d.id] ? ' <button class="ibtn sm" data-act="ocr" data-id="' + d.id + '" data-page="' + p.page + '">🤖 AI 看圖取字</button>' : '') + '</div><pre>' + esc(cut(p.text, 400)) + '</pre></div>';
         }).join('') + '</div></details></div>';
     });
-    h += '<div class="btns"><button class="btn" data-tab="bank">下一步：② 出題 →</button></div></div>';
+    h += '<div class="btns"><button class="btn" data-tab="bank">下一步：② 出題 →</button><button class="btn alt" data-act="clean">🧹 清理舊資料（換一門課）</button></div></div>';
   }
   h += '<div class="card"><h3>或匯入現成的題目</h3><p class="small">已經有題目（Word、Excel、CSV、文字）也可以直接放進題庫，格式與講師課堂小幫手相同：「1. 題目」「(A) 選項」「答案：B」，或表格欄位「題目｜選項A…｜答案」。</p>' +
     '<div class="btns"><label class="btn alt"><input type="file" id="quizFile" accept=".docx,.xlsx,.csv,.txt,.md" hidden>📂 選擇題目檔</label></div>' +
@@ -644,6 +644,39 @@ var ACT = {
   mkPick:mkPick, mkIn:function(el){ mkApply(el.dataset.id); }, mkOff:function(){ S.cfg.mk = null; save(); closeModal(); panel('paper'); }, mkScore:mkScore,
   backup:function(){ download('講義出題試卷工坊備份-' + today() + '.json', JSON.stringify({app:'lecture-quiz-builder', v:1, saved:new Date().toISOString(), state:S}, null, 1), 'application/json'); },
   restore:function(){ $('restoreFile').click(); },
+  clean:function(){
+    var draft = S.bank.filter(function(q){ return q.status !== 'ok'; }).length, ok = S.bank.length - draft, f = S.cfg.fin;
+    var row = function(k, label, n, on, note){ return '<label class="ck pk"><input type="checkbox" data-clean="' + k + '"' + (on && n ? ' checked' : '') + (n ? '' : ' disabled') + '> <span><b>' + label + '</b>' + (note ? '<br><small class="small">' + note + '</small>' : '') + '</span></label>'; };
+    openModal('<h2>🧹 清理舊資料</h2><p class="small">換一門課、或上一份試卷已經結束時，把用不到的舊資料清掉。AI 金鑰、登入序號、顯示設定不會動。</p><div class="picklist">' +
+      row('docs', '講義文字（' + S.docs.length + ' 份）', S.docs.length, true, '只是取出的文字；要再出題需重新匯入講義') +
+      row('draft', '待審（還沒採用）的題目（' + draft + ' 題）', draft, true, '') +
+      row('ok', '已審的題目（' + ok + ' 題）', ok, false, '題庫會全部清空；想留著下次用請先「📥 題庫 .json」') +
+      row('paper', '試卷題目、細目表與定案的試卷' + (f ? '（' + esc(f.title) + '）' : ''), P().ids.length || f ? 1 : 0, true, '試卷標題、配分等設定保留') +
+      row('ana', '試題分析的作答與結果', V.resp ? 1 : 0, true, '') +
+      row('stats', '題目上記錄的歷次統計（P、D）', S.bank.some(function(q){ return q.stats && q.stats.length; }) ? 1 : 0, false, '') +
+      '</div><label class="ck"><input type="checkbox" id="cleanBak" checked> 清理前先下載備份檔（萬一清錯可以還原）</label>' +
+      '<div class="vstack"><button class="btn red" data-act="cleanYes">清理勾選的資料</button><button class="btn alt" data-act="close">取消</button></div>');
+  },
+  cleanYes:function(){
+    var c = {}; document.querySelectorAll('[data-clean]').forEach(function(x){ c[x.dataset.clean] = x.checked; });
+    if(!Object.keys(c).some(function(k){ return c[k]; })){ toast('沒有勾選要清理的項目'); return; }
+    if($('cleanBak').checked) ACT.backup();
+    var done = [];
+    if(c.docs){ done.push(S.docs.length + ' 份講義'); S.docs = []; V.files = {}; }
+    if(c.draft || c.ok){
+      var before = S.bank.length;
+      S.bank = S.bank.filter(function(q){ return q.status === 'ok' ? !c.ok : !c.draft; });
+      var alive = {}; S.bank.forEach(function(q){ alive[q.id] = 1; });
+      P().ids = P().ids.filter(function(id){ return alive[id]; });
+      done.push((before - S.bank.length) + ' 題');
+    }
+    if(c.paper){ P().ids = []; P().bp = {}; S.cfg.fin = null; V.resp = null; V.ana = null; done.push('試卷'); }
+    if(c.ana){ V.resp = null; V.ana = null; done.push('作答'); }
+    if(c.stats){ S.bank.forEach(function(q){ q.stats = []; }); done.push('統計紀錄'); }
+    V.filt = {status:'all', ch:'', type:'', q:''}; V.show = 60;
+    save(); closeModal(); TABS.forEach(function(t){ panel(t[0]); });
+    toast('🧹 已清理：' + done.join('、'));
+  },
   wipe:function(){ openModal('<h2>清除全部資料？</h2><p>講義文字、題庫、試卷設定都會刪掉，無法復原。建議先下載備份檔。</p><div class="vstack"><button class="btn red" data-act="wipeYes">確定清除</button><button class="btn alt" data-act="close">取消</button></div>'); },
   wipeYes:function(){ ['cfg', 'bank', 'docs'].forEach(lsDel); S = {docs:[], bank:[], cfg:defCfg()}; V.resp = null; V.ana = null; V.files = {}; closeModal(); render(); toast('已清除'); },
   install:function(){
