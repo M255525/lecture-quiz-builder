@@ -28,13 +28,13 @@ if(!TABS.some(function(t){ return t[0] === V.tab; })) V.tab = 'src';
 function defCfg(){
   return {paper:{title:'課後測驗', cls:'', date:today(), minutes:30, desc:'請依題目作答，選擇題請在答案卡上劃記。', ids:[], pts:{s:2, m:3, t:1, f:2}, nVer:2, seed:1234, shuffle:1, types:{s:1, m:1, t:1, f:1}, bp:{}},
     gen:{types:{s:1, m:1, t:1, f:1}, aiN:10, aiTypes:{s:1, m:1, t:1, f:0}, aiBloom:{'記憶':1, '理解':1, '應用':1, '分析':0}, aiDiff:''},
-    gas:{askId:1, askName:1, email:0, sheet:1, required:1, feedback:1, shuffleQ:0}, mk:null, fin:null};
+    gas:{askId:1, askName:1, email:0, sheet:1, required:1, feedback:1, shuffleQ:0, style:'formal', sec:'style', progress:0, banner:1, confirm:'', fields:[], once:0, edit:0}, mk:null, fin:null};
 }
 function loadCfg(){ var c = lsJson('cfg', null), d = defCfg(); if(!c) return d; ['paper', 'gen', 'gas'].forEach(function(k){ c[k] = Object.assign({}, d[k], c[k] || {}); }); return Object.assign(d, c); }
-var S = {docs:lsJson('docs', []), bank:lsJson('bank', []), cfg:loadCfg()};
+var S = {docs:lsJson('docs', []), bank:lsJson('bank', []), cfg:loadCfg(), saved:lsJson('saved', [])};
 var warnedQuota = false;
 function save(){
-  var ok = lsSet('cfg', JSON.stringify(S.cfg)) & lsSet('bank', JSON.stringify(S.bank)) & lsSet('docs', JSON.stringify(S.docs));
+  var ok = lsSet('cfg', JSON.stringify(S.cfg)) & lsSet('bank', JSON.stringify(S.bank)) & lsSet('docs', JSON.stringify(S.docs)) & lsSet('saved', JSON.stringify(S.saved));
   if(!ok && !warnedQuota){ warnedQuota = true; toast('⚠ 瀏覽器空間不夠，講義文字可能沒存起來；請刪掉不用的講義或下載備份'); }
 }
 function P(){ return S.cfg.paper; }
@@ -225,14 +225,100 @@ function paperHTML(){
     '<div class="cks">' + chk('paper.shuffle', 'B 卷以後選項也打亂（有「以上皆是」的題目不打亂）', p.shuffle) + '</div>' +
     '<div class="btns"><button class="btn" data-act="prPaper"' + (items.length ? '' : ' disabled') + '>🖨 試卷</button><button class="btn alt" data-act="prCard"' + (items.length ? '' : ' disabled') + '>🖨 答案卡</button><button class="btn alt" data-act="prKey"' + (items.length ? '' : ' disabled') + '>🖨 解答本</button><button class="btn alt" data-act="prBp"' + (items.length ? '' : ' disabled') + '>🖨 雙向細目表</button></div>' +
     '<p class="small">印出或產生表單時會把這份試卷「定案」，④ 試題分析就用定案的版本對答案。' + (S.cfg.fin ? '目前定案：<b>' + esc(S.cfg.fin.title) + '</b>（' + S.cfg.fin.items.length + ' 題、' + S.cfg.fin.versions.length + ' 種卷，' + esc(S.cfg.fin.at) + '）' : '') + '</p></div>';
-  var g = S.cfg.gas;
-  h += '<div class="card gascard"><h3>📝 轉成 Google 表單測驗</h3><p class="small">產生一段 <b>Google Apps Script</b> 程式碼，貼到 script.google.com 執行一次，就會在你自己的 Google 雲端硬碟建好「測驗模式」的 Google 表單（自動計分、標好正確答案與配分）。本工具不會連到你的 Google 帳號。</p>' +
-    '<div class="cks">' + chk('gas.askId', '開頭要填學號', g.askId) + chk('gas.askName', '開頭要填姓名', g.askName) + chk('gas.email', '收集 Email', g.email) + chk('gas.required', '每題必填', g.required) + chk('gas.feedback', '答題回饋附出處頁碼與解析', g.feedback) + chk('gas.sheet', '一併建立回覆試算表', g.sheet) + chk('gas.shuffleQ', '表單也打亂題目順序', g.shuffleQ) + '</div>' +
+  h += savedHTML(items);
+  h += gasHTML(items, hasF);
+  return h;
+}
+
+/* 💾 儲存的試卷 */
+function savedHTML(items){
+  var p = P();
+  return '<div class="card savecard"><h3>💾 儲存的試卷　<span class="small">' + S.saved.length + ' 份</span></h3><p class="small">把組好的試卷存起來：題目內容、配分、卷別與亂數種子、Google 表單設定（風格、自訂欄位）、定案版本都一起存。之後可以重新載入再印、再產生表單、再做試題分析；題庫清掉也不影響。</p>' +
+    '<div class="row"><label class="fld">這份試卷的名稱<input id="saveName" value="' + esc(p.title + (p.cls ? '・' + p.cls : '') + '・' + today()) + '"></label></div>' +
+    '<div class="btns"><button class="btn" data-act="savePaper"' + (items.length ? '' : ' disabled') + '>💾 儲存目前的試卷</button><label class="btn alt"><input type="file" id="savedFile" accept=".json" hidden>📂 匯入試卷檔</label></div>' +
+    (S.saved.length ? '<div class="tscroll"><table class="ana saved"><thead><tr><th>名稱</th><th>題數</th><th>卷別</th><th>儲存時間</th><th></th></tr></thead><tbody>' +
+      S.saved.slice().reverse().map(function(x){ return '<tr><td><b>' + esc(x.name) + '</b>' + (x.fin ? '<br><span class="small">含定案版本</span>' : '') + '</td><td class="num">' + x.items.length + '</td><td>' + (x.paper.nVer > 1 ? 'A～' + L[x.paper.nVer - 1] : 'A') + '</td><td class="small">' + esc(x.at) + '</td><td><span class="pbtn" style="float:none"><button class="ibtn sm" data-act="loadPaper" data-id="' + x.id + '">📂 載入</button><button class="ibtn sm" data-act="dlPaper" data-id="' + x.id + '">📥 下載</button><button class="ibtn sm" data-act="delPaper" data-id="' + x.id + '" aria-label="刪除">🗑</button></span></td></tr>'; }).join('') +
+      '</tbody></table></div>' : '<p class="small">還沒有儲存的試卷。</p>') + '</div>';
+}
+
+/* 📝 Google 表單 */
+var bannerCache = {};
+function bannerURL(st, w, h, title, sub){
+  if(!st.banner) return '';
+  var key = st.id + '|' + w + '|' + title + '|' + sub; if(bannerCache[key]) return bannerCache[key];
+  var b = st.banner, cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  var c = cv.getContext('2d'), g = c.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, b.bg1); g.addColorStop(1, b.bg2); c.fillStyle = g; c.fillRect(0, 0, w, h);
+  var r = D.rng(st.id), u = w / 1600;
+  c.save(); c.globalAlpha = .16; c.strokeStyle = b.accent; c.fillStyle = b.accent;
+  if(b.pattern === 'rule'){ c.lineWidth = 2 * u; for(var y = 40 * u; y < h; y += 46 * u){ c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } c.globalAlpha = .9; c.fillRect(70 * u, h - 52 * u, 220 * u, 8 * u); }
+  else if(b.pattern === 'dots'){ for(var i = 0; i < 90; i++){ c.beginPath(); c.arc(r() * w, r() * h, (6 + r() * 22) * u, 0, 7); c.fill(); } }
+  else if(b.pattern === 'grid'){ c.lineWidth = 1.5 * u; for(var x = 0; x < w; x += 60 * u){ c.beginPath(); c.moveTo(x, 0); c.lineTo(x + h * .5, h); c.stroke(); } }
+  else if(b.pattern === 'stars'){ c.globalAlpha = .85; for(var k = 0; k < 70; k++){ var sx = r() * w, sy = r() * h, sr = (2 + r() * 6) * u; c.beginPath(); for(var a = 0; a < 10; a++){ var rr = a % 2 ? sr * .45 : sr, an = a * Math.PI / 5 - Math.PI / 2; c.lineTo(sx + rr * Math.cos(an), sy + rr * Math.sin(an)); } c.fill(); } }
+  else if(b.pattern === 'wave'){ c.lineWidth = 10 * u; for(var wv = 0; wv < 4; wv++){ c.beginPath(); for(var xx = 0; xx <= w; xx += 20 * u) c.lineTo(xx, h * (.62 + wv * .1) + Math.sin(xx / (110 * u) + wv) * 18 * u); c.stroke(); } }
+  c.restore();
+  var font = b.font === 'serif' ? '"Noto Serif TC","PMingLiU",serif' : '"Noto Sans TC","Microsoft JhengHei",sans-serif';
+  var size = 112 * u; c.font = '900 ' + size + 'px ' + font;
+  var t = (b.mark ? b.mark + ' ' : '') + title;
+  while(c.measureText(t).width > w - 160 * u && size > 40 * u){ size -= 4 * u; c.font = '900 ' + size + 'px ' + font; }
+  c.fillStyle = b.fg; c.textBaseline = 'middle'; c.shadowColor = 'rgba(0,0,0,.25)'; c.shadowBlur = 8 * u;
+  c.fillText(t, 70 * u, h * .45);
+  c.shadowBlur = 0; c.font = '700 ' + (40 * u) + 'px ' + font; c.globalAlpha = .9;
+  if(sub) c.fillText(sub, 74 * u, h * .45 + size * .5 + 44 * u);
+  return (bannerCache[key] = cv.toDataURL('image/png'));
+}
+function curStyle(){ return D.FORM_STYLES.filter(function(s){ return s.id === S.cfg.gas.style; })[0] || D.FORM_STYLES[0]; }
+function bannerSub(){ var p = P(); return [p.cls, p.date].filter(Boolean).join('　'); }
+function gasHTML(items, hasF){
+  var p = P(), g = S.cfg.gas, st = curStyle();
+  var h = '<div class="card gascard"><h3>📝 轉成 Google 表單測驗</h3><p class="small">產生一段 <b>Google Apps Script</b> 程式碼，貼到 script.google.com 執行一次，就會在你自己的 Google 雲端硬碟建好「測驗模式」的 Google 表單（自動計分、標好正確答案與配分）。本工具不會連到你的 Google 帳號。</p>';
+  // 風格
+  h += '<h4 class="sub">① 表單風格</h4><div class="styles">' + D.FORM_STYLES.map(function(s){
+    var img = bannerURL(s, 800, 200, p.title || '課後測驗', bannerSub());
+    return '<button class="stcard' + (s.id === st.id ? ' on' : '') + '" data-act="gasStyle" data-id="' + s.id + '" aria-pressed="' + (s.id === st.id) + '">' +
+      (img ? '<img alt="" src="' + img + '">' : '<span class="noban">沒有橫幅</span>') + '<b>' + esc(s.name) + '</b><span>' + esc(s.desc) + '</span></button>';
+  }).join('') + '</div>';
+  // 預覽
+  var plan = items.length ? D.gasData({title:p.title, desc:p.desc, cls:p.cls, minutes:p.minutes}, items.slice(0, 6), [D.makeVersions(items.slice(0, 6), 1)[0]], p.pts, gasOpts()) : null;
+  var sec0 = plan && plan.forms[0].sections[0], q0 = sec0 && sec0.items[0];
+  h += '<div class="fprev" style="--fc:' + st.theme.color + '"><div class="fp-top"></div>' + (g.banner && st.banner ? '<img alt="橫幅預覽" src="' + bannerURL(st, 800, 200, p.title || '課後測驗', bannerSub()) + '">' : '') +
+    '<div class="fp-card fp-head"><h5>' + esc(p.title || '測驗') + '</h5><p>' + esc(plan ? plan.forms[0].desc : '').replace(/\n/g, '<br>') + '</p></div>' +
+    (sec0 && sec0.title ? '<div class="fp-sec">' + esc(sec0.title) + (sec0.page ? '<small>（新的一頁）</small>' : '') + (sec0.help ? '<span>' + esc(sec0.help) + '</span>' : '') + '</div>' : '') +
+    (q0 ? '<div class="fp-card"><b>' + esc(q0.title) + '</b>' + q0.opts.slice(0, 4).map(function(o){ return '<div class="fp-opt">○ ' + esc(o) + '</div>'; }).join('') + '</div>' : '<div class="fp-card small">試卷還沒有題目</div>') +
+    '<p class="small fp-tip">🎨 主題顏色與字型 Apps Script 不能設定，建表單後到表單右上角「自訂主題」手動選：顏色 <span class="sw" style="background:' + st.theme.color + '"></span><code>' + st.theme.color + '</code>、字型「' + esc(st.theme.font) + '」。</p></div>';
+  // 結構
+  h += '<h4 class="sub">② 版面</h4><div class="row"><label class="fld">分段方式<select data-bind="gas.sec">' + Object.keys(D.SEC_MODES).map(function(k){ return '<option value="' + k + '"' + (g.sec === k ? ' selected' : '') + '>' + D.SEC_MODES[k] + (k === 'style' ? '（' + D.SEC_MODES[st.sec] + '）' : '') + '</option>'; }).join('') + '</select></label>' +
+    '<label class="fld">送出後顯示的訊息<input data-bind="gas.confirm" value="' + esc(g.confirm) + '" placeholder="' + esc(st.confirm) + '"><small>空白＝用風格預設</small></label></div>' +
+    '<div class="cks">' + chk('gas.banner', '最上方放橫幅圖片（試卷標題＋班級日期）', g.banner) + chk('gas.progress', '顯示進度列', g.progress) + '</div>';
+  // 欄位與條件
+  h += '<h4 class="sub">③ 填答者資料與條件</h4><div class="cks">' + chk('gas.askId', '學號（必填）', g.askId) + chk('gas.askName', '姓名（必填）', g.askName) + chk('gas.email', '收集 Email', g.email) + '</div>' +
+    '<div class="flds">' + (g.fields || []).map(fieldRow).join('') + '</div>' +
+    '<div class="btns chips"><span class="small">＋ 新增欄位：</span>' + D.FIELD_PRESETS.map(function(f, i){ return '<button class="ibtn sm" data-act="fldAdd" data-i="' + i + '">' + esc(f.label) + '</button>'; }).join('') + '<button class="ibtn sm" data-act="fldAdd" data-i="-1">＋ 空白欄位</button></div>';
+  var fe = D.checkFields(g.fields);
+  if(fe.length) h += '<p class="small bad">⚠ ' + fe.map(esc).join('；') + '</p>';
+  h += '<div class="cks">' + chk('gas.required', '每題必填', g.required) + chk('gas.once', '每人只能填一次（填答者要登入 Google 帳號）', g.once) + chk('gas.edit', '送出後可以修改答案', g.edit) + chk('gas.feedback', '答題回饋附出處頁碼與解析', g.feedback) + chk('gas.sheet', '一併建立回覆試算表', g.sheet) + chk('gas.shuffleQ', '表單也打亂題目順序', g.shuffleQ) + '</div>' +
     (hasF ? '<p class="small bad">⚠ 試卷裡有填空題：Apps Script 不能設定簡答題的標準答案，表單裡要手動評分（或先改成選擇題）。</p>' : '') +
     (+p.nVer > 1 ? '<p class="small">有 ' + p.nVer + ' 種卷：會建 ' + p.nVer + ' 份表單（每卷一份），回覆分開收。</p>' : '') +
-    (g.shuffleQ ? '<p class="small bad">⚠ 表單打亂題目順序後，回覆試算表的欄位仍是原順序，可以照常分析。</p>' : '') +
+    (g.once ? '<p class="small">「每人只能填一次」會要求學員先登入 Google 帳號才能作答。</p>' : '') +
     '<div class="btns"><button class="btn" data-act="gas"' + (items.length ? '' : ' disabled') + '>📋 產生 Apps Script 程式碼</button></div></div>';
   return h;
+}
+function fieldRow(f, i){
+  var choice = /^(mc|dd|cb)$/.test(f.type), canValid = f.type === 'text' || f.type === 'para';
+  var vopts = f.type === 'para' ? {none:'不檢查', len:'字數上限'} : D.FIELD_VALID;
+  return '<div class="frow"><div class="row">' +
+    '<label class="fld">欄位名稱<input data-fld="' + i + '.label" value="' + esc(f.label) + '" placeholder="例如：單位"></label>' +
+    '<label class="fld">類型<select data-fld="' + i + '.type">' + Object.keys(D.FIELD_TYPES).map(function(k){ return '<option value="' + k + '"' + (f.type === k ? ' selected' : '') + '>' + D.FIELD_TYPES[k] + '</option>'; }).join('') + '</select></label>' +
+    (canValid ? '<label class="fld">填寫條件<select data-fld="' + i + '.valid">' + Object.keys(vopts).map(function(k){ return '<option value="' + k + '"' + ((f.valid || 'none') === k ? ' selected' : '') + '>' + vopts[k] + '</option>'; }).join('') + '</select></label>' : '') +
+    (canValid && (f.valid === 'len' || f.valid === 'regex') ? '<label class="fld">' + (f.valid === 'len' ? '最多幾個字' : '格式（規則運算式）') + '<input data-fld="' + i + '.arg" value="' + esc(f.arg || '') + '" placeholder="' + (f.valid === 'len' ? '200' : '^09\\d{8}$') + '"></label>' : '') +
+    '</div>' + (choice ? '<label class="fld">選項（一行一個）<textarea rows="2" data-fld="' + i + '.opts">' + esc(f.opts || '') + '</textarea></label>' : '') +
+    '<div class="row"><label class="fld">說明文字（選填）<input data-fld="' + i + '.help" value="' + esc(f.help || '') + '"></label></div>' +
+    '<div class="fbtn"><label class="ck"><input type="checkbox" data-fld="' + i + '.req"' + (+f.req ? ' checked' : '') + '> 必填</label><button class="ibtn sm" data-act="fldUp" data-i="' + i + '" aria-label="上移">↑</button><button class="ibtn sm" data-act="fldDel" data-i="' + i + '">✕ 刪除</button></div></div>';
+}
+function gasOpts(){
+  var g = S.cfg.gas;
+  return {style:g.style, sec:g.sec, progress:!!g.progress, confirm:g.confirm, banner:!!g.banner, fields:g.fields || [], once:!!g.once, edit:!!g.edit,
+    askId:!!g.askId, askName:!!g.askName, collectEmail:!!g.email, required:!!g.required, feedback:!!g.feedback, sheet:!!g.sheet, shuffleQuestions:!!g.shuffleQ};
 }
 
 /* ④ 試題分析 */
@@ -474,10 +560,13 @@ function bpDoc(){
   return h;
 }
 function gasModal(){
-  var f = finalize(), g = S.cfg.gas;
-  var code = D.toGasCode({title:f.title, desc:P().desc}, f.items, f.versions, f.pts, {askId:!!g.askId, askName:!!g.askName, collectEmail:!!g.email, required:!!g.required, feedback:!!g.feedback, sheet:!!g.sheet, shuffleQuestions:!!g.shuffleQ});
+  var fe = D.checkFields(S.cfg.gas.fields);
+  if(fe.length){ toast('⚠ 自訂欄位還有問題：' + fe[0]); return; }
+  var f = finalize(), g = S.cfg.gas, p = P(), st = curStyle(), o = gasOpts();
+  if(g.banner && st.banner) o.bannerB64 = bannerURL(st, 1600, 400, f.title || '測驗', bannerSub()).split(',')[1];
+  var code = D.toGasCode({title:f.title, desc:p.desc, cls:p.cls, minutes:p.minutes}, f.items, f.versions, f.pts, o);
   V.gasCode = code;
-  openModal('<h2>📝 Google 表單的 Apps Script 程式碼</h2><ol class="steps"><li>開 <b>script.google.com</b>（用你要放表單的 Google 帳號登入），按「新專案」。</li><li>把編輯區原本的內容<b>全部刪掉</b>，貼上下面的程式碼，按 💾 儲存。</li><li>上方函式選單選 <b>createQuiz</b>，按「▶ 執行」。第一次會要求授權：選你的帳號 →「進階」→「前往（不安全）」→「允許」（這是你自己的程式，只會建立表單與試算表）。</li><li>執行完到下方「執行記錄」複製<b>填答網址</b>發給學員；表單與回覆試算表也會出現在你的雲端硬碟。</li></ol>' +
+  openModal('<h2>📝 Google 表單的 Apps Script 程式碼</h2><p class="small">風格：<b>' + esc(st.name) + '</b>' + (g.fields && g.fields.length ? '、自訂欄位 ' + g.fields.length + ' 個' : '') + '</p><ol class="steps"><li>開 <b>script.google.com</b>（用你要放表單的 Google 帳號登入），按「新專案」。</li><li>把編輯區原本的內容<b>全部刪掉</b>，貼上下面的程式碼，按 💾 儲存。</li><li>上方函式選單選 <b>createQuiz</b>，按「▶ 執行」。第一次會要求授權：選你的帳號 →「進階」→「前往（不安全）」→「允許」（這是你自己的程式，只會建立表單與試算表）。</li><li>執行完到下方「執行記錄」複製<b>填答網址</b>發給學員；表單與回覆試算表也會出現在你的雲端硬碟。</li><li>（選做）打開表單編輯畫面，右上角 🎨「自訂主題」選顏色 <code>' + st.theme.color + '</code>、字型「' + esc(st.theme.font) + '」，風格就完整了。</li></ol>' +
     '<p class="small">考完後在回覆試算表選「檔案 → 下載 → 逗號分隔值（.csv）」，丟回 ④ 試題分析就能分析' + (f.versions.length > 1 ? '（每卷一份，檔名請保留「A 卷」「B 卷」字樣，或在 ④ 選擇卷別）' : '') + '。</p>' +
     '<textarea class="code" readonly rows="12">' + esc(code) + '</textarea>' +
     '<div class="vstack"><button class="btn" data-act="gasCopy">📋 複製程式碼</button><button class="btn alt" data-act="gasDl">📥 下載 .gs 檔</button><button class="btn alt" data-act="close">關閉</button></div>');
@@ -581,7 +670,7 @@ function restoreFile(ev){
   var rd = new FileReader();
   rd.onload = function(){
     try{ var j = JSON.parse(rd.result); if(j.app !== 'lecture-quiz-builder' || !j.state || !Array.isArray(j.state.bank)) throw 0;
-      S = {docs:j.state.docs || [], bank:j.state.bank, cfg:Object.assign(defCfg(), j.state.cfg || {})}; save(); closeModal(); render(); toast('已還原備份'); }
+      var dc = defCfg(), jc = j.state.cfg || {}; ['paper', 'gen', 'gas'].forEach(function(k){ jc[k] = Object.assign({}, dc[k], jc[k] || {}); }); S = {docs:j.state.docs || [], bank:j.state.bank, cfg:Object.assign(dc, jc), saved:j.state.saved || []}; save(); closeModal(); render(); toast('已還原備份'); }
     catch(e){ toast('這不是講義出題試卷工坊的備份檔'); }
   };
   rd.readAsText(f);
@@ -633,6 +722,33 @@ var ACT = {
   prPaper:function(){ printHTML(paperDoc(), 'pp'); }, prCard:function(){ printHTML(cardDoc(), 'pp'); }, prKey:function(){ printHTML(keyDoc(), 'pp'); }, prBp:function(){ printHTML(bpDoc(), 'pp'); },
   prAna:function(){ printHTML(anaDoc(), 'pp'); },
   gas:gasModal,
+  gasStyle:function(el){ var st = D.FORM_STYLES.filter(function(x){ return x.id === el.dataset.id; })[0]; if(!st) return; var g = S.cfg.gas; g.style = st.id; g.sec = 'style'; g.progress = st.progress ? 1 : 0; g.confirm = ''; save(); panel('paper'); },
+  fldAdd:function(el){ var i = +el.dataset.i, f = i >= 0 ? Object.assign({}, D.FIELD_PRESETS[i]) : {label:'', type:'text', req:0}; f.valid = f.valid || 'none'; f.req = f.req ? 1 : 0; (S.cfg.gas.fields = S.cfg.gas.fields || []).push(f); save(); panel('paper'); },
+  fldDel:function(el){ S.cfg.gas.fields.splice(+el.dataset.i, 1); save(); panel('paper'); },
+  fldUp:function(el){ var i = +el.dataset.i, a = S.cfg.gas.fields; if(i > 0){ var t = a[i - 1]; a[i - 1] = a[i]; a[i] = t; save(); panel('paper'); } },
+  savePaper:function(){
+    var items = paperItems(); if(!items.length){ toast('試卷還沒有題目'); return; }
+    var name = ($('saveName').value || '').trim() || P().title || '試卷';
+    var copy = function(x){ return JSON.parse(JSON.stringify(x)); };
+    var e = {id:'p' + Date.now().toString(36), name:name, at:new Date().toLocaleString('zh-TW', {hour12:false}).slice(0, 16), paper:copy(P()), gas:copy(S.cfg.gas), items:copy(items), fin:S.cfg.fin ? copy(S.cfg.fin) : null};
+    var old = S.saved.filter(function(x){ return x.name === name; })[0];
+    if(old){ e.id = old.id; S.saved[S.saved.indexOf(old)] = e; } else S.saved.push(e);
+    save(); panel('paper'); toast((old ? '✓ 已更新「' : '✓ 已儲存「') + name + '」（' + items.length + ' 題）');
+  },
+  loadPaper:function(el){
+    var e = S.saved.filter(function(x){ return x.id === el.dataset.id; })[0]; if(!e) return;
+    var have = {}, added = 0; S.bank.forEach(function(q){ have[q.id] = 1; });
+    e.items.forEach(function(q){ if(!have[q.id]){ S.bank.push(JSON.parse(JSON.stringify(Object.assign({}, q, {status:'ok'})))); added++; } });
+    S.cfg.paper = Object.assign(defCfg().paper, JSON.parse(JSON.stringify(e.paper)));
+    S.cfg.paper.ids = e.items.map(function(q){ return q.id; });
+    S.cfg.gas = Object.assign(defCfg().gas, JSON.parse(JSON.stringify(e.gas || {})));
+    if(e.fin){ S.cfg.fin = JSON.parse(JSON.stringify(e.fin)); V.resp = null; V.ana = null; }
+    save(); TABS.forEach(function(t){ panel(t[0]); });
+    toast('✓ 已載入「' + e.name + '」' + (added ? '，' + added + ' 題放回題庫' : '') + (e.fin ? '，④ 試題分析可以用它的定案版本' : ''));
+  },
+  dlPaper:function(el){ var e = S.saved.filter(function(x){ return x.id === el.dataset.id; })[0]; if(e) download(safeName(e.name) + '-試卷.json', JSON.stringify({app:'lecture-quiz-builder', kind:'paper', v:1, paper:e}, null, 1), 'application/json'); },
+  delPaper:function(el){ var e = S.saved.filter(function(x){ return x.id === el.dataset.id; })[0]; if(!e) return; V.delId = e.id; openModal('<h2>刪除「' + esc(e.name) + '」？</h2><p>只刪除這份儲存的試卷，題庫裡的題目不會動。</p><div class="vstack"><button class="btn red" data-act="delPaperYes">確定刪除</button><button class="btn alt" data-act="close">取消</button></div>'); },
+  delPaperYes:function(){ S.saved = S.saved.filter(function(x){ return x.id !== V.delId; }); save(); closeModal(); panel('paper'); },
   gasCopy:function(){ copyText(V.gasCode, '已複製程式碼，貼到 script.google.com'); },
   gasDl:function(){ download(safeName(S.cfg.fin.title) + '-Google表單.gs', V.gasCode, 'text/plain'); },
   sim:function(){ var f = S.cfg.fin; V.resp = null; addResp(D.simulate(f.items, f.versions, 40, Date.now() % 9999), '模擬作答'); V.resp.formats = ['模擬作答（虛構）']; panel('ana'); toast('已產生 40 位虛構學員的模擬作答'); },
@@ -653,6 +769,7 @@ var ACT = {
       row('ok', '已審的題目（' + ok + ' 題）', ok, false, '題庫會全部清空；想留著下次用請先「📥 題庫 .json」') +
       row('paper', '試卷題目、細目表與定案的試卷' + (f ? '（' + esc(f.title) + '）' : ''), P().ids.length || f ? 1 : 0, true, '試卷標題、配分等設定保留') +
       row('ana', '試題分析的作答與結果', V.resp ? 1 : 0, true, '') +
+      row('saved', '💾 儲存的試卷（' + S.saved.length + ' 份）', S.saved.length, false, '') +
       row('stats', '題目上記錄的歷次統計（P、D）', S.bank.some(function(q){ return q.stats && q.stats.length; }) ? 1 : 0, false, '') +
       '</div><label class="ck"><input type="checkbox" id="cleanBak" checked> 清理前先下載備份檔（萬一清錯可以還原）</label>' +
       '<div class="vstack"><button class="btn red" data-act="cleanYes">清理勾選的資料</button><button class="btn alt" data-act="close">取消</button></div>');
@@ -672,13 +789,14 @@ var ACT = {
     }
     if(c.paper){ P().ids = []; P().bp = {}; S.cfg.fin = null; V.resp = null; V.ana = null; done.push('試卷'); }
     if(c.ana){ V.resp = null; V.ana = null; done.push('作答'); }
+    if(c.saved){ done.push(S.saved.length + ' 份儲存的試卷'); S.saved = []; }
     if(c.stats){ S.bank.forEach(function(q){ q.stats = []; }); done.push('統計紀錄'); }
     V.filt = {status:'all', ch:'', type:'', q:''}; V.show = 60;
     save(); closeModal(); TABS.forEach(function(t){ panel(t[0]); });
     toast('🧹 已清理：' + done.join('、'));
   },
   wipe:function(){ openModal('<h2>清除全部資料？</h2><p>講義文字、題庫、試卷設定都會刪掉，無法復原。建議先下載備份檔。</p><div class="vstack"><button class="btn red" data-act="wipeYes">確定清除</button><button class="btn alt" data-act="close">取消</button></div>'); },
-  wipeYes:function(){ ['cfg', 'bank', 'docs'].forEach(lsDel); S = {docs:[], bank:[], cfg:defCfg()}; V.resp = null; V.ana = null; V.files = {}; closeModal(); render(); toast('已清除'); },
+  wipeYes:function(){ ['cfg', 'bank', 'docs', 'saved'].forEach(lsDel); S = {docs:[], bank:[], cfg:defCfg(), saved:[]}; V.resp = null; V.ana = null; V.files = {}; closeModal(); render(); toast('已清除'); },
   install:function(){
     var m = ios ? '請按 Safari 下方的「分享」圖示，選「加入主畫面」。' : '請按瀏覽器網址列右側的安裝圖示，或右上角選單的「安裝應用程式／加到主畫面」。';
     if(window._dp){ window._dp.prompt(); window._dp.userChoice.then(function(){ window._dp = null; }); }
@@ -705,6 +823,7 @@ document.addEventListener('input', function(ev){
   if(ds.docch){ var d = S.docs.filter(function(x){ return x.id === ds.docch; })[0]; if(d){ d.chapter = t.value; save(); } return; }
   if(ds.docrange){ var d2 = S.docs.filter(function(x){ return x.id === ds.docrange; })[0]; if(d2){ d2.range = t.value; save(); } return; }
   if(ds.bp != null){ P().bp[ds.bp] = t.value === '' ? 0 : +t.value; save(); return; }
+  if(ds.fld && t.type !== 'checkbox' && t.tagName !== 'SELECT'){ var fp = ds.fld.split('.'); S.cfg.gas.fields[+fp[0]][fp[1]] = t.value; save(); return; }
   if(ds.filt === 'q'){ V.filt.q = t.value; clearTimeout(filtT); filtT = setTimeout(function(){ var pos = t.selectionStart; panel('bank'); var n = document.querySelector('[data-filt="q"]'); if(n){ n.focus(); try{ n.setSelectionRange(pos, pos); }catch(e){} } }, 250); }
 });
 document.addEventListener('change', function(ev){
@@ -713,12 +832,14 @@ document.addEventListener('change', function(ev){
     if(t.type === 'checkbox') setBind(ds.bind, t.checked ? 1 : 0);
     else if(t.tagName === 'SELECT') setBind(ds.bind, ds.num ? +t.value : t.value);
     save();
-    if(/^paper\.(types|pts|nVer|shuffle)|^gas\.|^gen\./.test(ds.bind) && (t.type === 'checkbox' || t.tagName === 'SELECT' || /pts/.test(ds.bind))) panel(/^gen/.test(ds.bind) ? 'bank' : 'paper');
+    if(/^paper\.(types|pts|nVer|shuffle|title|cls|date|minutes|desc)|^gas\.|^gen\./.test(ds.bind)) panel(/^gen/.test(ds.bind) ? 'bank' : 'paper');
     return;
   }
   if(ds.docon){ var d = S.docs.filter(function(x){ return x.id === ds.docon; })[0]; if(d){ d.off = !t.checked; save(); panel('src'); panel('bank'); } return; }
   if(ds.docch || ds.docrange){ panel('src'); panel('bank'); panel('paper'); return; }
   if(ds.bp != null){ panel('paper'); return; }
+  if(ds.fld){ var fq = ds.fld.split('.'), ff = S.cfg.gas.fields[+fq[0]]; if(t.type === 'checkbox') ff[fq[1]] = t.checked ? 1 : 0; else ff[fq[1]] = t.value; if(fq[1] === 'type' && !/^(text|para)$/.test(t.value)) ff.valid = 'none'; save(); panel('paper'); return; }
+  if(t.id === 'savedFile' && t.files[0]){ var sr = new FileReader(); sr.onload = function(){ try{ var j = JSON.parse(sr.result); var e = j && j.kind === 'paper' && j.paper; if(!e || !Array.isArray(e.items)) throw 0; e.id = 'p' + Date.now().toString(36); S.saved.push(e); save(); panel('paper'); toast('✓ 已匯入「' + e.name + '」，按「📂 載入」使用'); }catch(x){ toast('這不是試卷檔'); } }; sr.readAsText(t.files[0]); t.value = ''; return; }
   if(ds.filt && ds.filt !== 'q'){ V.filt[ds.filt] = t.value; V.show = 60; panel('bank'); return; }
   if(t.id === 'srcFile'){ importFiles(t.files); t.value = ''; return; }
   if(t.id === 'quizFile' && t.files[0]){ var fl = t.files[0]; IO.readFile(fl).then(function(x){ var r = x.rows ? IO.rowsToQuiz(x.rows) : IO.parseQuizText(x.text); if(!r.items.length){ toast('看不出題目，請檢查格式'); return; } var m = addToBank(D.fromSimple(r.items, baseName(fl.name)), '匯入'); V.tab = 'bank'; switchTab(); toast(m); }, function(e){ toast('❌ ' + e.message); }); t.value = ''; return; }
@@ -844,7 +965,7 @@ function initGate(){
 /* ---------- 啟動 ---------- */
 window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); window._dp = e; });
 if('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('service-worker.js').catch(function(){});
-(function(){ if(!window.TOOL_WATERMARK) return; var w = document.createElement('div'); w.id = 'pdfWatermark'; w.setAttribute('aria-hidden', 'true'); w.innerHTML = '<img alt="" src="' + window.TOOL_WATERMARK + '">'; document.body.appendChild(w); })();
+// 列印／存 PDF 不加浮水印（2026-11-27 使用者要求：試卷要乾淨）
 applyView(); render(); initMarquee();
 initGate();
 // 測試掛鉤

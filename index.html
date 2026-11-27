@@ -211,6 +211,35 @@ body:has(#entryGate:not(.hidden)){overflow:hidden}
 @media (max-width:600px){.bar h1{font-size:1.4rem}.qc{padding-left:2.5rem}.pbtn{float:none;display:flex;margin:.2rem 0 0}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}#marqueeTrack{animation-duration:90s!important}}
 
+/* ③ Google 表單：風格、預覽、自訂欄位；儲存的試卷 */
+h4.sub{margin:1rem 0 .3rem;font-size:1rem;color:var(--main);border-bottom:1px dashed var(--line);padding-bottom:.2rem}
+.styles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(13rem,100%),1fr));gap:.6rem}
+.stcard{display:flex;flex-direction:column;gap:.2rem;text-align:left;border:2px solid var(--line);border-radius:.4rem;background:#fff;padding:.45rem;font-size:.82rem;color:var(--sub);line-height:1.45}
+.stcard img{width:100%;aspect-ratio:4/1;object-fit:cover;border-radius:.25rem;display:block}
+.stcard .noban{display:grid;place-items:center;aspect-ratio:4/1;border:1.5px dashed var(--line);border-radius:.25rem;font-size:.8rem}
+.stcard b{font-size:.98rem;color:var(--ink)}
+.stcard.on{border-color:var(--pen);box-shadow:0 0 0 3px rgba(183,50,44,.15)}
+.stcard.on b::after{content:' ✔';color:var(--pen)}
+.fprev{--fc:#673AB7;margin-top:.7rem;background:color-mix(in srgb,var(--fc) 12%,#fff);border:1px solid var(--line);border-radius:.4rem;padding:.7rem;max-width:40rem}
+.fprev .fp-top{height:.5rem;background:var(--fc);border-radius:.3rem .3rem 0 0;margin:-.7rem -.7rem .6rem}
+.fprev>img{width:100%;border-radius:.4rem;display:block;margin-bottom:.5rem}
+.fp-card{background:#fff;border-radius:.4rem;padding:.6rem .8rem;margin-top:.5rem;border:1px solid #e0e0e0}
+.fp-head{border-top:.5rem solid var(--fc)}
+.fp-head h5{margin:0 0 .3rem;font-size:1.3rem}
+.fp-head p{margin:0;font-size:.85rem;color:#444}
+.fp-sec{margin-top:.6rem;background:var(--fc);color:#fff;border-radius:.4rem .4rem 0 0;padding:.4rem .8rem;font-weight:700}
+.fp-sec small{font-weight:500;margin-left:.3rem;opacity:.85}
+.fp-sec span{display:block;font-weight:500;font-size:.8rem;opacity:.9}
+.fp-opt{font-size:.88rem;margin-top:.25rem;color:#333}
+.fp-tip{margin:.6rem 0 0}
+.sw{display:inline-block;width:.9rem;height:.9rem;border-radius:.2rem;vertical-align:-.1rem;border:1px solid rgba(0,0,0,.2)}
+.flds{display:grid;gap:.5rem;margin-top:.4rem}
+.frow{border:1px solid var(--line);border-left:3px solid #2F6B3A;border-radius:.3rem;background:#fff;padding:.2rem .7rem .5rem}
+.fbtn{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin-top:.3rem}
+.chips{align-items:center}
+.savecard{border-left-color:#A8700F}
+table.saved{min-width:32rem}
+
 /* ---------- 列印 ---------- */
 @media print{
   @page{size:A4;margin:14mm 13mm}
@@ -288,7 +317,6 @@ body:has(#entryGate:not(.hidden)){overflow:hidden}
 <script src="io.js"></script>
 <script src="pdftext.js"></script>
 <script src="course-link.js"></script>
-<script src="watermark.js"></script>
 <script src="ai.js"></script>
 <script src="app.js"></script>
 </body>

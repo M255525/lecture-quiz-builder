@@ -386,57 +386,193 @@ function blueprintTable(items){
 }
 
 /* ---------- Google 表單：產生 Apps Script 程式碼 ---------- */
-// paper: {title, desc}；versions 已用 viewQ 轉好的每卷題目
+// 表單風格：Apps Script 不能改表單的主題顏色與字型，所以「風格」＝橫幅圖片＋說明文字＋分段方式＋題號格式＋進度列＋完成訊息；
+// 主題顏色、字型只給建議，由使用者在表單右上角 🎨 自行設定。
+var FORM_STYLES = [
+  {id:'formal', name:'正式考試', desc:'深藍橫幅、每個大題一頁、題目標配分，適合期中期末與結訓測驗。',
+    banner:{bg1:'#1F2E4A', bg2:'#2D4470', fg:'#FFFFFF', accent:'#E8C36A', pattern:'rule', font:'serif', mark:''},
+    theme:{color:'#1F2E4A', font:'正式（例如 Noto Serif）'},
+    intro:'本測驗共 {n} 題，滿分 {full} 分{min}。請獨立作答，送出前再檢查一次。', sec:'page', secTitle:'cn', secHelp:'', title:'numPts', progress:false,
+    confirm:'作答已送出。成績與解答將由講師另行公布。'},
+  {id:'quiz', name:'課堂小測驗', desc:'明亮的黃色橫幅、全部題目在同一頁、語氣輕鬆，適合上課中的隨堂小考。',
+    banner:{bg1:'#FFC93C', bg2:'#FF9A3C', fg:'#3A2500', accent:'#FFFFFF', pattern:'dots', font:'sans', mark:'📝'},
+    theme:{color:'#F4A100', font:'活潑'},
+    intro:'📝 小測驗時間！共 {n} 題{min}，看看剛剛學到多少。', sec:'header', secTitle:'emoji', secHelp:'', title:'num', progress:false,
+    confirm:'🎉 完成！可以按「查看分數」看看自己答對幾題。'},
+  {id:'corp', name:'企業內訓', desc:'沉穩的藍綠色橫幅、每個大題一頁、說明文字較正式，適合企業內訓與研習。',
+    banner:{bg1:'#0F5257', bg2:'#1B7A72', fg:'#FFFFFF', accent:'#9FE2D6', pattern:'grid', font:'sans', mark:''},
+    theme:{color:'#0F5257', font:'基本'},
+    intro:'感謝參加{cls}。以下測驗共 {n} 題，滿分 {full} 分{min}，結果作為訓練成效評估參考。', sec:'page', secTitle:'cn', secHelp:'', title:'num', progress:true,
+    confirm:'感謝您完成測驗，訓練成效結果將提供給承辦單位參考。'},
+  {id:'game', name:'闖關挑戰', desc:'紫色星空橫幅、每個大題是一關、有進度列與鼓勵文字，適合青少年或遊戲化課程。',
+    banner:{bg1:'#3B1E78', bg2:'#7A2E8E', fg:'#FFFFFF', accent:'#FFD84D', pattern:'stars', font:'sans', mark:'🏆'},
+    theme:{color:'#5B2A86', font:'活潑'},
+    intro:'🚀 闖關開始！一共 {n} 題，過完所有關卡就完成挑戰{min}。', sec:'page', secTitle:'level', secHelp:'加油！這一關有 {k} 題。', title:'num', progress:true,
+    confirm:'🏆 全部過關！按「查看分數」看看你的成績。'},
+  {id:'gentle', name:'溫和易讀', desc:'暖綠色大字橫幅、每 5 題一頁、說明簡短，適合樂齡班或不常用手機填表的學員。',
+    banner:{bg1:'#3F7D4E', bg2:'#5E9E5C', fg:'#FFFFFF', accent:'#FFF3B0', pattern:'wave', font:'sans', mark:''},
+    theme:{color:'#3F7D4E', font:'基本（題目字級建議調到 14 以上）'},
+    intro:'共 {n} 題，慢慢作答就好。每頁做完按「繼續」。', sec:'page5', secTitle:'part', secHelp:'慢慢來，不用急。', title:'num', progress:true,
+    confirm:'謝謝您！已經送出了。'},
+  {id:'plain', name:'極簡', desc:'沒有橫幅與分段，只有題目，適合快速收集答案。',
+    banner:null, theme:{color:'#5F6368', font:'基本'},
+    intro:'共 {n} 題{min}。', sec:'none', secTitle:'cn', secHelp:'', title:'num', progress:false, confirm:'已送出。'}
+];
+var styleById = {}; FORM_STYLES.forEach(function(s){ styleById[s.id] = s; });
+var SEC_MODES = {style:'依風格', none:'不分段', header:'大題標題（同一頁）', page:'每個大題換一頁', page5:'每 5 題換一頁'};
+var FIELD_TYPES = {text:'簡答', para:'段落', mc:'單選', dd:'下拉選單', cb:'核取方塊', date:'日期'};
+var FIELD_VALID = {none:'不檢查', num:'只能填數字', email:'要是 Email', len:'字數上限', regex:'符合格式（規則運算式）'};
+var FIELD_PRESETS = [
+  {label:'班級', type:'dd', opts:'甲班\n乙班', req:1},
+  {label:'單位', type:'text', req:1},
+  {label:'職稱', type:'text', req:0},
+  {label:'座號', type:'text', req:1, valid:'num'},
+  {label:'Email', type:'text', req:0, valid:'email'},
+  {label:'手機', type:'text', req:0, valid:'regex', arg:'^09\\d{8}$', help:'請填 09 開頭的 10 碼數字'},
+  {label:'上課日期', type:'date', req:0},
+  {label:'給講師的話', type:'para', req:0, valid:'len', arg:'200'}
+];
+var CN_NUM = '一二三四五六七八九十';
+function fill(t, v){ return str(t).replace(/\{(\w+)\}/g, function(_, k){ return v[k] == null ? '' : v[k]; }); }
+function cleanField(f){
+  f = f || {};
+  var type = FIELD_TYPES[f.type] ? f.type : 'text', valid = FIELD_VALID[f.valid] ? f.valid : 'none';
+  if(type !== 'text' && !(type === 'para' && valid === 'len')) valid = 'none';
+  var opts = /^(mc|dd|cb)$/.test(type) ? str(f.opts).split('\n').map(function(x){ return x.trim(); }).filter(Boolean) : [];
+  return {label:str(f.label).trim(), type:type, opts:opts, req:!!+f.req, valid:valid, arg:str(f.arg).trim(), help:str(f.help).trim()};
+}
+// 檢查自訂欄位，回傳問題清單
+function checkFields(fields){
+  var e = [], seen = {};
+  (fields || []).forEach(function(raw, i){
+    var f = cleanField(raw), n = '第 ' + (i + 1) + ' 個欄位';
+    if(!f.label) e.push(n + '沒有名稱');
+    else if(seen[f.label]) e.push('欄位「' + f.label + '」重複'); else seen[f.label] = 1;
+    if(/^\s*(?:Q|第)?\s*\d{1,3}\s*(?:題)?\s*[.．、:：)）]/i.test(f.label)) e.push('欄位「' + f.label + '」不要用數字開頭，會被當成題目');
+    if(/^(mc|dd|cb)$/.test(f.type) && f.opts.length < 2) e.push('欄位「' + (f.label || i + 1) + '」至少要 2 個選項');
+    if(f.valid === 'len' && !(+f.arg > 0)) e.push('欄位「' + f.label + '」字數上限要填數字');
+    if(f.valid === 'regex'){ try{ new RegExp(f.arg); if(!f.arg) throw 0; }catch(x){ e.push('欄位「' + f.label + '」的格式規則寫錯了'); } }
+  });
+  return e;
+}
+function qTitle(fmt, n, q, pts){
+  if(fmt === 'cn') return '第 ' + n + ' 題：' + q.q;
+  if(fmt === 'numPts') return n + '. ' + q.q + '（' + pts + ' 分）';
+  return n + '. ' + q.q;
+}
+// 一份表單的題目分段：依風格（或覆寫的 sec）切成 [{title, help, items:[…]}]
+function sectionsOf(list, st, secMode){
+  var mode = secMode && secMode !== 'style' ? secMode : st.sec, out = [];
+  if(mode === 'none') return [{title:'', help:'', page:false, items:list}];
+  if(mode === 'page5'){
+    for(var i = 0; i < list.length; i += 5){ var k = Math.floor(i / 5); out.push({title:st.secTitle === 'level' ? '第 ' + (k + 1) + ' 關' : '第 ' + (k + 1) + ' 部分（第 ' + (i + 1) + '～' + Math.min(list.length, i + 5) + ' 題）', help:fill(st.secHelp, {k:Math.min(5, list.length - i)}), page:true, items:list.slice(i, i + 5)}); }
+    return out;
+  }
+  var cur = null;
+  list.forEach(function(x){ if(!cur || cur.t !== x.type){ cur = {t:x.type, items:[]}; out.push(cur); } cur.items.push(x); });
+  var icon = {t:'⭕', s:'🔘', m:'☑️', f:'✏️'};
+  return out.map(function(g, i){
+    var name = TYPES[g.t] + '題', p = g.items[0].points, same = g.items.every(function(x){ return x.points === p; });
+    var t = st.secTitle === 'level' ? '第 ' + (i + 1) + ' 關：' + name : st.secTitle === 'emoji' ? icon[g.t] + ' ' + name : st.secTitle === 'part' ? '第 ' + (i + 1) + ' 部分：' + name : CN_NUM[i] + '、' + name;
+    var help = (same ? '每題 ' + p + ' 分，共 ' + g.items.length + ' 題' : '共 ' + g.items.length + ' 題') + (g.t === 'm' ? '；每題至少有兩個正確答案，全對才給分' : '') + '。' + (st.secHelp ? fill(st.secHelp, {k:g.items.length}) : '');
+    return {title:t, help:help, page:mode === 'page', items:g.items};
+  });
+}
+// paper: {title, desc, cls, minutes}；versions 每卷一份表單
 function gasData(paper, items, versions, pts, o){
   o = o || {};
+  var st = styleById[o.style] || FORM_STYLES[0];
+  var full = items.reduce(function(a, q){ return a + pointsOf(q, pts); }, 0);
+  var byId = {}; items.forEach(function(q){ byId[q.id] = q; });
+  var vars = {n:items.length, full:full, min:+paper.minutes ? '，作答時間 ' + paper.minutes + ' 分鐘' : '', cls:paper.cls ? '「' + paper.cls + '」' : '本課程', title:paper.title};
+  var intro = [fill(st.intro, vars), str(paper.desc).trim()].filter(Boolean).join('\n\n');
   var forms = versions.map(function(ver){
-    var byId = {}; items.forEach(function(q){ byId[q.id] = q; });
-    return {title:str(paper.title || '測驗') + (versions.length > 1 ? '（' + ver.name + ' 卷）' : ''), desc:str(paper.desc),
-      items:ver.order.map(function(id, i){
-        var q = viewQ(byId[id], ver);
-        var correct = q.type === 't' ? [q.ans === 'A' ? 0 : 1] : q.type === 'f' ? [] : q.ans.split('').map(function(L){ return LETTERS.indexOf(L); });
-        var fb = o.feedback && q.src ? '出處：' + q.src.file + ' 第 ' + q.src.page + ' 頁' + (q.explain ? '。' + q.explain : '') : (o.feedback && q.explain ? q.explain : '');
-        return {type:q.type, title:(i + 1) + '. ' + q.q, opts:q.type === 't' ? ['○ 對', '✕ 錯'] : q.opts.slice(), correct:correct, points:pointsOf(q, pts), feedback:fb, answer:q.type === 'f' ? str(q.ans) : ''};
-      })};
+    var list = ver.order.map(function(id, i){
+      var q = viewQ(byId[id], ver), p = pointsOf(q, pts);
+      var correct = q.type === 't' ? [q.ans === 'A' ? 0 : 1] : q.type === 'f' ? [] : q.ans.split('').map(function(L){ return LETTERS.indexOf(L); });
+      var fb = o.feedback && q.src ? '出處：' + q.src.file + ' 第 ' + q.src.page + ' 頁' + (q.explain ? '。' + q.explain : '') : (o.feedback && q.explain ? q.explain : '');
+      return {type:q.type, title:qTitle(st.title, i + 1, q, p), opts:q.type === 't' ? ['○ 對', '✕ 錯'] : q.opts.slice(), correct:correct, points:p, feedback:fb, answer:q.type === 'f' ? str(q.ans) : ''};
+    });
+    return {title:str(paper.title || '測驗') + (versions.length > 1 ? '（' + ver.name + ' 卷）' : ''), desc:intro, sections:sectionsOf(list, st, o.sec)};
   });
-  return {forms:forms, askId:o.askId !== false, askName:o.askName !== false, collectEmail:!!o.collectEmail, required:o.required !== false, sheet:o.sheet !== false, shuffle:!!o.shuffleQuestions};
+  return {style:st.id, forms:forms, banner:st.banner && o.banner !== false && o.bannerB64 ? o.bannerB64 : '',
+    progress:o.progress == null ? st.progress : !!o.progress, confirm:str(o.confirm).trim() || st.confirm,
+    askId:o.askId !== false, askName:o.askName !== false, collectEmail:!!o.collectEmail, required:o.required !== false, sheet:o.sheet !== false,
+    shuffle:!!o.shuffleQuestions, once:!!o.once, edit:!!o.edit, fields:(o.fields || []).map(cleanField).filter(function(f){ return f.label; })};
 }
 function toGasCode(paper, items, versions, pts, o){
-  var data = gasData(paper, items, versions, pts, o);
+  var data = gasData(paper, items, versions, pts, o), st = styleById[data.style];
   var json = JSON.stringify(data, null, 1).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
   return [
     '/**',
-    ' * 由「講義出題試卷工坊」產生的 Google 表單測驗程式（產生時間 ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + '）',
+    ' * 由「講義出題試卷工坊」產生的 Google 表單測驗程式（產生時間 ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + '，風格：' + st.name + '）',
     ' * 用法：1. 開 https://script.google.com 新增專案　2. 全部貼上取代原本內容並儲存',
     ' *       3. 上方函式選 createQuiz → 按「執行」→ 依畫面授權　4. 在「執行記錄」看表單網址',
+    ' * 主題顏色與字型 Apps Script 不能設定，建議到表單右上角 🎨 自訂主題：顏色 ' + st.theme.color + '、字型 ' + st.theme.font + '。',
     ' * 注意：填空題 Apps Script 不能設定標準答案，請在表單「回覆」裡手動評分。題目請自行確認後再發給學員。',
     ' */',
     'var QUIZ = ' + json + ';',
+    '',
+    'function addField_(form, f) {',
+    '  var it;',
+    '  if (f.type === \'para\') it = form.addParagraphTextItem();',
+    '  else if (f.type === \'mc\') it = form.addMultipleChoiceItem().setChoiceValues(f.opts);',
+    '  else if (f.type === \'dd\') it = form.addListItem().setChoiceValues(f.opts);',
+    '  else if (f.type === \'cb\') it = form.addCheckboxItem().setChoiceValues(f.opts);',
+    '  else if (f.type === \'date\') it = form.addDateItem();',
+    '  else it = form.addTextItem();',
+    '  it.setTitle(f.label).setRequired(f.req);',
+    '  if (f.help) it.setHelpText(f.help);',
+    '  if (f.type === \'text\' && f.valid !== \'none\') {',
+    '    var v = FormApp.createTextValidation();',
+    '    if (f.valid === \'num\') v.requireNumber().setHelpText(\'請填數字\');',
+    '    else if (f.valid === \'email\') v.requireTextIsEmail().setHelpText(\'請填正確的 Email\');',
+    '    else if (f.valid === \'len\') v.requireTextLengthLessThanOrEqualTo(Number(f.arg)).setHelpText(\'最多 \' + f.arg + \' 個字\');',
+    '    else if (f.valid === \'regex\') v.requireTextMatchesPattern(f.arg).setHelpText(f.help || \'格式不對，請再檢查\');',
+    '    it.setValidation(v.build());',
+    '  }',
+    '  if (f.type === \'para\' && f.valid === \'len\') it.setValidation(FormApp.createParagraphTextValidation().requireTextLengthLessThanOrEqualTo(Number(f.arg)).setHelpText(\'最多 \' + f.arg + \' 個字\').build());',
+    '}',
+    '',
+    'function addQuestion_(form, q) {',
+    '  var it;',
+    '  if (q.type === \'f\') {',
+    '    it = form.addTextItem();',
+    '    it.setTitle(q.title).setPoints(q.points).setRequired(QUIZ.required);',
+    '    if (q.feedback) it.setGeneralFeedback(FormApp.createFeedback().setText(\'參考答案：\' + q.answer + \'。\' + q.feedback).build());',
+    '    return;',
+    '  }',
+    '  it = q.type === \'m\' ? form.addCheckboxItem() : form.addMultipleChoiceItem();',
+    '  it.setTitle(q.title).setPoints(q.points).setRequired(QUIZ.required);',
+    '  it.setChoices(q.opts.map(function (o, k) { return it.createChoice(o, q.correct.indexOf(k) >= 0); }));',
+    '  if (q.feedback) {',
+    '    it.setFeedbackForCorrect(FormApp.createFeedback().setText(\'答對了！\' + q.feedback).build());',
+    '    it.setFeedbackForIncorrect(FormApp.createFeedback().setText(q.feedback).build());',
+    '  }',
+    '}',
     '',
     'function createQuiz() {',
     '  QUIZ.forms.forEach(function (F) {',
     '    var form = FormApp.create(F.title);',
     '    form.setIsQuiz(true);',
     '    if (F.desc) form.setDescription(F.desc);',
+    '    form.setProgressBar(QUIZ.progress);',
+    '    if (QUIZ.confirm) form.setConfirmationMessage(QUIZ.confirm);',
     '    if (QUIZ.collectEmail) form.setCollectEmail(true);',
+    '    if (QUIZ.once) form.setLimitOneResponsePerUser(true);',
+    '    if (QUIZ.edit) form.setAllowResponseEdits(true);',
     '    if (QUIZ.shuffle) form.setShuffleQuestions(true);',
+    '    if (QUIZ.banner) form.addImageItem().setImage(Utilities.newBlob(Utilities.base64Decode(QUIZ.banner), \'image/png\', \'banner.png\')).setAlignment(FormApp.Alignment.CENTER);',
     '    if (QUIZ.askId) form.addTextItem().setTitle(\'學號\').setRequired(true);',
     '    if (QUIZ.askName) form.addTextItem().setTitle(\'姓名\').setRequired(true);',
-    '    F.items.forEach(function (q) {',
-    '      var it;',
-    '      if (q.type === \'f\') {',
-    '        it = form.addTextItem();',
-    '        it.setTitle(q.title).setPoints(q.points).setRequired(QUIZ.required);',
-    '        if (q.feedback) it.setGeneralFeedback(FormApp.createFeedback().setText(\'參考答案：\' + q.answer + \'。\' + q.feedback).build());',
-    '        return;',
+    '    QUIZ.fields.forEach(function (f) { addField_(form, f); });',
+    '    F.sections.forEach(function (s) {',
+    '      if (s.title) {',
+    '        var h = s.page ? form.addPageBreakItem() : form.addSectionHeaderItem();',
+    '        h.setTitle(s.title);',
+    '        if (s.help) h.setHelpText(s.help);',
     '      }',
-    '      it = q.type === \'m\' ? form.addCheckboxItem() : form.addMultipleChoiceItem();',
-    '      it.setTitle(q.title).setPoints(q.points).setRequired(QUIZ.required);',
-    '      it.setChoices(q.opts.map(function (o, k) { return it.createChoice(o, q.correct.indexOf(k) >= 0); }));',
-    '      if (q.feedback) {',
-    '        it.setFeedbackForCorrect(FormApp.createFeedback().setText(\'答對了！\' + q.feedback).build());',
-    '        it.setFeedbackForIncorrect(FormApp.createFeedback().setText(q.feedback).build());',
-    '      }',
+    '      s.items.forEach(function (q) { addQuestion_(form, q); });',
     '    });',
     '    var msg = \'【\' + F.title + \'】\\n填答網址：\' + form.getPublishedUrl() + \'\\n編輯網址：\' + form.getEditUrl();',
     '    if (QUIZ.sheet) {',
@@ -606,6 +742,7 @@ var API = {TYPES:TYPES, BLOOM:BLOOM, DIFF:DIFF, LETTERS:LETTERS, normKey:normKey
   mkQ:mkQ, checkQ:checkQ, dedupe:dedupe, stemKey:stemKey, ansText:ansText, fromSimple:fromSimple, toTchRows:toTchRows, toBankRows:toBankRows,
   chunkPages:chunkPages, aiPrompt:aiPrompt, parseAiJson:parseAiJson, findQuote:findQuote, validateAiQuestions:validateAiQuestions,
   pickByBlueprint:pickByBlueprint, makeVersions:makeVersions, viewQ:viewQ, toMaster:toMaster, pointsOf:pointsOf, blueprintTable:blueprintTable,
+  FORM_STYLES:FORM_STYLES, SEC_MODES:SEC_MODES, FIELD_TYPES:FIELD_TYPES, FIELD_VALID:FIELD_VALID, FIELD_PRESETS:FIELD_PRESETS, cleanField:cleanField, checkFields:checkFields, sectionsOf:sectionsOf,
   gasData:gasData, toGasCode:toGasCode, parseResponses:parseResponses, isRight:isRight, analyze:analyze, krLabel:krLabel, simulate:simulate};
 if(typeof module !== 'undefined' && module.exports) module.exports = API; else root.LQB = API;
 })(this);

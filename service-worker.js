@@ -1,7 +1,7 @@
 // 加入主畫面＋離線可用。network-first＋同源快取備援，不快取跨網域請求。
 // github.io 所有工具共用同一個 Cache Storage：activate 只能刪「自己前綴」的舊快取，不可刪別人的。
 // 上線後改版要把 CACHE_NAME 尾數 +1 再 push。
-const CACHE_NAME = 'lecture-quiz-builder-shell-v3';
+const CACHE_NAME = 'lecture-quiz-builder-shell-v4';
 const SHELL_FILES = [
   './',
   './index.html',
@@ -10,7 +10,6 @@ const SHELL_FILES = [
   './io.js',
   './pdftext.js',
   './course-link.js',
-  './watermark.js',
   './app.js',
   './ai.js',
   './manual.html',

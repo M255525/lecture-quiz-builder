@@ -1,7 +1,7 @@
 # 端對端測試：python tools/e2e_lqb.py [截圖資料夾]
 # 自己在 port 8919 起靜態伺服器（不佔用正式預覽的 8909）
 # 範本產生的部分只驗標準配備；這個工具自己的功能測試加在「主功能」那段。
-import sys, io, os, json, subprocess, time, urllib.request
+import sys, io, os, re, json, subprocess, time, urllib.request
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
 from playwright.sync_api import sync_playwright
 
@@ -168,10 +168,39 @@ try:
         ok('複製 GAS 程式碼', 'createQuiz' in pg.evaluate('navigator.clipboard.readText()'))
         pg.click('#modalBox [data-act=close]')
 
+        # 表單風格、自訂欄位
+        pg.click('[data-act=gasStyle][data-id=game]'); pg.wait_for_timeout(200)
+        ok('選闖關挑戰風格', pg.evaluate("window._tool.S.cfg.gas.style") == 'game' and pg.evaluate("window._tool.S.cfg.gas.progress") == 1)
+        ok('預覽出現關卡標題', '第 1 關' in pg.inner_text('.fprev'))
+        ok('6 種內建風格', pg.locator('.stcard').count() == 6)
+        pg.click('[data-act=fldAdd][data-i="0"]'); pg.click('[data-act=fldAdd][data-i="4"]'); pg.wait_for_timeout(150)
+        ok('新增欄位：班級、Email', pg.locator('.frow').count() == 2 and pg.input_value('[data-fld="0.label"]') == '班級')
+        pg.fill('[data-fld="0.opts"]', '週一班\n週三班'); pg.dispatch_event('[data-fld="0.opts"]', 'change')
+        pg.click('[data-act=fldAdd][data-i="-1"]'); pg.wait_for_timeout(150)
+        pg.click('[data-act=gas]'); pg.wait_for_timeout(200)
+        ok('空白欄位名稱擋下產生', pg.locator('#modal.show').count() == 0)
+        pg.click('[data-act=fldDel][data-i="2"]'); pg.wait_for_timeout(150)
+        pg.check('[data-bind="gas.once"]'); pg.wait_for_timeout(150)
+        pg.screenshot(path=os.path.join(SHOTS, 'gas-style.png'), full_page=True)
+        pg.click('[data-act=gas]'); pg.wait_for_timeout(300)
+        code = pg.input_value('#modalBox textarea.code')
+        ok('程式碼含風格、欄位、條件、橫幅', '"style": "game"' in code and '"label": "班級"' in code and '週三班' in code and '"once": true' in code and len(re.search(r'"banner": "([^"]*)"', code).group(1)) > 1000)
+        ok('新程式碼語法正確', pg.evaluate("(c) => { try { new Function(c); return true; } catch(e) { return e.message; } }", code) is True)
+        pg.click('#modalBox [data-act=close]')
+        # 儲存的試卷
+        nids = pg.evaluate("window._tool.S.cfg.paper.ids.length")
+        pg.fill('#saveName', '期中考A'); pg.click('[data-act=savePaper]'); pg.wait_for_timeout(150)
+        ok('儲存試卷', pg.evaluate("window._tool.S.saved.length") == 1 and '期中考A' in pg.inner_text('.savecard'))
+        pg.click('[data-act=clearPaper]'); pg.select_option('[data-bind="paper.nVer"]', '1'); pg.click('[data-act=gasStyle][data-id=plain]'); pg.wait_for_timeout(150)
+        pg.click('[data-act=loadPaper]'); pg.wait_for_timeout(200)
+        ok('載入試卷：題目、卷數、表單風格都回來', pg.evaluate("window._tool.S.cfg.paper.ids.length") == nids and pg.evaluate("window._tool.S.cfg.paper.nVer") == 2 and pg.evaluate("window._tool.S.cfg.gas.style") == 'game')
+        with pg.expect_download() as dl: pg.click('[data-act=dlPaper]')
+        ok('下載試卷檔', dl.value.suggested_filename.endswith('-試卷.json'))
+
         # ④ 試題分析
         pg.click('[data-tab=ana]')
         pg.click('[data-act=sim]'); pg.wait_for_timeout(300)
-        ok('模擬 40 人分析', '40 人' in pg.inner_text('#panel-ana') and pg.locator('table.ana > tbody > tr').count() == n)
+        ok('模擬 40 人分析', '40 人' in pg.inner_text('#panel-ana') and pg.locator('#panel-ana table.ana > tbody > tr').count() == n, (pg.locator('#panel-ana table.ana > tbody > tr').count(), n, pg.inner_text('#panel-ana')[:200]))
         ok('有 KR-20', 'KR-20' in pg.inner_text('#panel-ana'))
         rows = pg.evaluate("(() => { const f = window._tool.S.cfg.fin; return LQB.simulate(f.items, [f.versions[1]], 6, 3); })()")
         tsv = '\n'.join('\t'.join(str(x) for x in r) for r in rows)
@@ -247,7 +276,7 @@ try:
         sw = open(os.path.join(ROOT, 'service-worker.js'), encoding='utf-8').read()
         ok('SW 只刪自己前綴的快取', "k.indexOf(CACHE_NAME.replace(" in sw)
         pg.emulate_media(media='print')
-        ok('列印有浮水印', pg.evaluate("getComputedStyle(document.getElementById('pdfWatermark')).display") == 'flex')
+        ok('列印不加浮水印（使用者要求）', pg.locator('#pdfWatermark').count() == 0)
         pg.emulate_media(media='screen')
         mp = ctx.new_page(); mp.goto(BASE + 'manual.html')
         ok('手冊有完整版創作者資料', mp.locator('#creator .mk-creator').count() == 1 and len(mp.inner_text('#creator')) > 400)

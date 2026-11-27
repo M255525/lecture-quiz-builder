@@ -14,6 +14,10 @@
 - 題目欄位：`{id,type:s|m|t|f,q,opts,ans,explain,src:{doc,file,chapter,page,quote},origin:rule|ai|import|manual,status:draft|ok,diff:0-2,bloom,chapter,warn,stats}`；是非 ans A＝對 B＝錯；填空可接受答案用「／」分隔。
 - 組卷：`pickByBlueprint`（只抽 status ok）、`makeVersions`（A 卷原順序；B 以後同題型群組內打亂、選項打亂，含「以上皆是」等不打亂；`perms[id][新位置]=母卷位置`）、`viewQ`／`toMaster` 互轉。印出或產生 GAS 時 `finalize()` 把試卷快照存在 `cfg.fin`，④ 只用快照對答案。
 - Google 表單：`toGasCode` 產生 `.gs`（題目 `JSON.stringify` 內嵌），`FormApp.create`＋`setIsQuiz(true)`、`createChoice(text,isCorrect)`、`setPoints`、回饋、`setDestination` 回覆試算表；多卷＝多份表單。**填空題 Apps Script 不能設標準答案**。測試用假 FormApp 執行過。
+- 表單風格 `FORM_STYLES`（6 種：formal／quiz／corp／game／gentle／plain）＝橫幅圖片（app 用 canvas 畫 1600×400 PNG，base64 內嵌進 GAS，`addImageItem`）＋說明模板＋分段方式（`sectionsOf`：none／header／page／page5）＋題號格式＋進度列＋完成訊息；**Apps Script 不能設表單主題顏色字型**，只在畫面與程式註解給建議。題目標題一律「N. 」開頭（回覆檔分析靠它對題號）。
+- 自訂欄位 `gas.fields`（`cleanField`／`checkFields`）：簡答、段落、單選、下拉、核取、日期＋必填＋填寫條件（數字、Email、字數上限、規則運算式，`FormApp.createTextValidation`）；欄位名稱不能數字開頭。表單條件：每人限填一次（要登入）、可修改答案。
+- 💾 儲存的試卷 `lqb.saved`：存題目副本＋paper＋gas 設定＋定案 `fin`，載入時題庫沒有的題目放回；可下載／匯入 `kind:'paper'` 的 json。清理舊資料可選擇清掉。
+- **列印不加浮水印**（2026-11-27 使用者要求，`watermark.js` 不再載入）。
 - 作答解析 `parseResponses`：Google 表單（欄名「N. 題幹」、值是選項文字、多選「, 」連接）、作答表（學號｜姓名｜卷別｜1…n）、小幫手成績檔（✔/✘（字母））。卷別：欄位 → ④ 選單 → 檔名「A卷」。
 - 試題分析 `analyze`：P、D（高低分組各 27%，`Math.round(N*.27)`，同分維持原順序）、點二系列（母體標準差、未校正）、KR-20、誘答（高分組選比低分組多 ≥ ceil(g×.15) 才標）。門檻：P>.9 太簡單、<.2 太難、D<.2 偏低、D<0 答案可能有誤。測試有 6 人×3 題手算案例。
 - **作答名單只放 `V.resp`（記憶體）**，題庫只存統計；成績寫回 course-link `results.quiz`（百分制）。
@@ -34,7 +38,7 @@
 - e2e 用 `ctx.route` 假造授權回應（GOOD 有效、OLD 過期、其他查無），不碰真的試算表。上線前記得在 github-dashboard `LICENSED_REPOS` 與 AI 工具導航第 6 欄標需序號。
 
 ## 標準配備
-跑馬燈（工作區公告 GAS，滑鼠移入暫停，不可關）、⚙ 常用設定（收合式：資料／顯示／關於本工具）、首訪警語＋頁面入口、`manual.html#creator` 完整版（改 `tools/manual_body.html` 後跑 `python tools/build_manual.py`，創作者區塊從賞鳥地圖範本複製）、PWA、訪客計數器、列印浮水印。
+跑馬燈（工作區公告 GAS，滑鼠移入暫停，不可關）、⚙ 常用設定（收合式：資料／顯示／關於本工具）、首訪警語＋頁面入口、`manual.html#creator` 完整版（改 `tools/manual_body.html` 後跑 `python tools/build_manual.py`，創作者區塊從賞鳥地圖範本複製）、PWA、訪客計數器。（列印浮水印依使用者要求拿掉）
 
 ## 測試
 - `node tools/test_engine.mjs`：147 項（範例講義擷取、規則出題、AI 驗證、組卷 A/B 對照、GAS 用假 FormApp 執行、三種作答格式、手算試題分析）。

@@ -103,37 +103,113 @@ const weird = M.mkQ({type:'s', q:'含"引號"、\'單引號\'、反斜線\\ 與\
 const fill = M.mkQ({type:'f', q:'（　）是指甲。', ans:'乙'});
 const tf = M.mkQ({type:'t', q:'甲是乙。', ans:'B'});
 const multi = M.mkQ({type:'m', q:'多選', opts:['1', '2', '3'], ans:'AC'});
-const gitems = [weird, fill, tf, multi];
+const gitems = [tf, weird, multi, fill];
 const gv = M.makeVersions(gitems, 2, {seed:2});
-const code = M.toGasCode({title:'期中測驗', desc:'說明'}, gitems, gv, {s:2, m:3, t:1, f:2}, {feedback:true});
-let fn; try{ fn = new Function('FormApp', 'SpreadsheetApp', 'Logger', code + '\nreturn createQuiz;'); }catch(e){ console.log(e); }
-ok('GAS 程式碼語法正確', typeof fn === 'function');
-// 假的 FormApp
-const made = [];
-function item(kind){ const it = {kind, title:'', points:0, choices:[], req:false, fb:{}}; it.setTitle = t => { it.title = t; return it; }; it.setPoints = p => { it.points = p; return it; }; it.setRequired = r => { it.req = r; return it; };
-  it.createChoice = (v, c) => ({v, c}); it.setChoices = c => { it.choices = c; return it; }; it.setFeedbackForCorrect = f => { it.fb.ok = f; return it; }; it.setFeedbackForIncorrect = f => { it.fb.no = f; return it; }; it.setGeneralFeedback = f => { it.fb.g = f; return it; }; return it; }
-const FA = {create:(t) => { const f = {title:t, items:[], quiz:false, dest:null}; made.push(f);
-  ['setIsQuiz', 'setDescription', 'setCollectEmail', 'setShuffleQuestions'].forEach(m => { f[m] = (x) => { if(m === 'setIsQuiz') f.quiz = x; return f; }; });
-  f.addTextItem = () => { const i = item('text'); f.items.push(i); return i; }; f.addMultipleChoiceItem = () => { const i = item('mc'); f.items.push(i); return i; }; f.addCheckboxItem = () => { const i = item('cb'); f.items.push(i); return i; };
-  f.getPublishedUrl = () => 'https://forms/x'; f.getEditUrl = () => 'https://forms/e'; f.setDestination = (t, id) => { f.dest = id; return f; }; return f; },
-  createFeedback:() => { const b = {t:''}; b.setText = (t) => { b.t = t; return b; }; b.build = () => b.t; return b; }, DestinationType:{SPREADSHEET:'S'}};
-const SA = {create:(t) => ({getId:() => 'ss1', getUrl:() => 'https://sheet'})};
-const logs = []; fn(FA, SA, {log:(m) => logs.push(m)})();
+// 假的 FormApp：記下每個呼叫
+function runGas(code){
+  let fn; try{ fn = new Function('FormApp', 'SpreadsheetApp', 'Logger', 'Utilities', code + '\nreturn createQuiz;'); }catch(e){ return {err:e}; }
+  const made = [], logs = [];
+  const chain = (o) => new Proxy(o, {get:(t, k) => k in t ? t[k] : (...a) => { (t.calls = t.calls || []).push([k, ...a]); return t.self; }});
+  function item(kind){ const it = {kind, title:'', points:0, choices:[], req:false, fb:{}, help:'', values:null, valid:null};
+    it.self = it;
+    it.setTitle = t => { it.title = t; return it; }; it.setPoints = p => { it.points = p; return it; }; it.setRequired = r => { it.req = r; return it; };
+    it.setHelpText = h => { it.help = h; return it; }; it.setChoiceValues = v => { it.values = v; return it; }; it.setValidation = v => { it.valid = v; return it; };
+    it.createChoice = (v, c) => ({v, c}); it.setChoices = c => { it.choices = c; return it; }; it.setFeedbackForCorrect = f => { it.fb.ok = f; return it; }; it.setFeedbackForIncorrect = f => { it.fb.no = f; return it; }; it.setGeneralFeedback = f => { it.fb.g = f; return it; };
+    it.setImage = b => { it.img = b; return it; }; it.setAlignment = () => it; return it; }
+  function validation(){ const v = {rules:[]}; const add = (k) => (...a) => { v.rules.push([k, ...a]); return v; };
+    ['requireNumber', 'requireTextIsEmail', 'requireTextLengthLessThanOrEqualTo', 'requireTextMatchesPattern', 'setHelpText'].forEach(k => v[k] = add(k)); v.build = () => v.rules; return v; }
+  const FA = {create:(t) => { const f = {title:t, items:[], quiz:false, dest:null, opt:{}}; made.push(f);
+      ['setIsQuiz', 'setDescription', 'setCollectEmail', 'setShuffleQuestions', 'setProgressBar', 'setConfirmationMessage', 'setLimitOneResponsePerUser', 'setAllowResponseEdits'].forEach(m => { f[m] = (x) => { f.opt[m] = x; if(m === 'setIsQuiz') f.quiz = x; return f; }; });
+      const adder = (kind) => () => { const i = item(kind); f.items.push(i); return i; };
+      f.addTextItem = adder('text'); f.addParagraphTextItem = adder('para'); f.addMultipleChoiceItem = adder('mc'); f.addCheckboxItem = adder('cb'); f.addListItem = adder('dd'); f.addDateItem = adder('date');
+      f.addPageBreakItem = adder('page'); f.addSectionHeaderItem = adder('header'); f.addImageItem = adder('image');
+      f.getPublishedUrl = () => 'https://forms/x'; f.getEditUrl = () => 'https://forms/e'; f.setDestination = (t, id) => { f.dest = id; return f; }; return f; },
+    createFeedback:() => { const b = {t:''}; b.setText = (t) => { b.t = t; return b; }; b.build = () => b.t; return b; },
+    createTextValidation:validation, createParagraphTextValidation:validation, DestinationType:{SPREADSHEET:'S'}, Alignment:{CENTER:'C'}};
+  const SA = {create:() => ({getId:() => 'ss1', getUrl:() => 'https://sheet'})};
+  const UT = {base64Decode:(b) => 'bytes:' + b, newBlob:(d, m, n) => ({d, m, n})};
+  fn(FA, SA, {log:(m) => logs.push(m)}, UT)();
+  return {made, logs};
+}
+const paperInfo = {title:'期中測驗', desc:'說明', cls:'行銷實務班', minutes:30};
+const pts = {s:2, m:3, t:1, f:2};
+const code = M.toGasCode(paperInfo, gitems, gv, pts, {feedback:true, style:'formal', bannerB64:'QUJD'});
+let g1 = runGas(code);
+ok('GAS 程式碼語法正確、可執行', !g1.err, g1.err);
+const made = g1.made;
 eq('建兩份表單（A、B 卷）', made.map(f => f.title), ['期中測驗（A 卷）', '期中測驗（B 卷）']);
 ok('設為測驗', made.every(f => f.quiz));
-eq('A 卷題目數（含學號姓名）', made[0].items.length, 6);
 const A = made[0].items;
-eq('學號必填', [A[0].title, A[0].req], ['學號', true]);
-eq('單選：標題與特殊字元原樣保留', A[2].title, '1. ' + weird.q);
-eq('單選：正確答案是第 3 個', A[2].choices.map(c => c.c), [false, false, true, false]);
-eq('單選：選項原樣', A[2].choices.map(c => c.v), weird.opts);
-eq('單選配分 2', A[2].points, 2);
-eq('填空：文字題、配分 2', [A[3].kind, A[3].points], ['text', 2]);
-eq('是非：錯是正確', [A[4].kind, A[4].choices.map(c => c.c)], ['mc', [false, true]]);
-eq('多選：核取方塊、AC', [A[5].kind, A[5].choices.map(c => c.c), A[5].points], ['cb', [true, false, true], 3]);
-ok('回饋含出處頁碼', /第 2 頁/.test(A[2].fb.ok), A[2].fb);
-ok('B 卷的正確選項仍是同一個文字', (() => { const B = made[1].items.find(i => i.title.endsWith(weird.q)); return B.choices.find(c => c.c).v === "e'f"; })());
-ok('建了回覆試算表', made.every(f => f.dest === 'ss1') && /回覆試算表/.test(logs[0]));
+eq('正式考試：橫幅圖片在最前面', [A[0].kind, A[0].img.d, A[0].img.m], ['image', 'bytes:QUJD', 'image/png']);
+eq('學號、姓名必填', [A[1].title, A[1].req, A[2].title], ['學號', true, '姓名']);
+const qs = A.filter(i => /^\d+\. /.test(i.title));
+eq('四題', qs.length, 4);
+eq('正式考試：每大題一頁（是非、單選、多選、填空）', A.filter(i => i.kind === 'page').map(i => i.title), ['一、是非題', '二、單選題', '三、多選題', '四、填空題']);
+ok('大題說明有配分', /每題 2 分，共 1 題/.test(A.find(i => i.title === '二、單選題').help));
+const sq = qs.find(i => i.title.indexOf('引號') >= 0);
+eq('題號格式：1. 題幹（2 分）＋特殊字元原樣', sq.title, '2. ' + weird.q + '（2 分）');
+eq('單選：正確答案是第 3 個', sq.choices.map(c => c.c), [false, false, true, false]);
+eq('單選：選項原樣', sq.choices.map(c => c.v), weird.opts);
+eq('填空：文字題、配分 2', [qs[3].kind, qs[3].points], ['text', 2]);
+eq('是非：錯是正確', [qs[0].kind, qs[0].choices.map(c => c.c)], ['mc', [false, true]]);
+eq('多選：核取方塊、AC、3 分', [qs[2].kind, qs[2].choices.map(c => c.c), qs[2].points], ['cb', [true, false, true], 3]);
+ok('回饋含出處頁碼', /第 2 頁/.test(sq.fb.ok), sq.fb);
+ok('說明含題數滿分時間與自訂說明', /共 4 題，滿分 8 分，作答時間 30 分鐘/.test(made[0].opt.setDescription) && /說明$/.test(made[0].opt.setDescription), made[0].opt.setDescription);
+eq('正式考試：完成訊息、沒有進度列', [made[0].opt.setConfirmationMessage, made[0].opt.setProgressBar], [M.FORM_STYLES[0].confirm, false]);
+ok('B 卷的正確選項仍是同一個文字', (() => { const B = made[1].items.find(i => i.title.indexOf(weird.q) >= 0); return B.choices.find(c => c.c).v === "e'f"; })());
+ok('建了回覆試算表', made.every(f => f.dest === 'ss1') && /回覆試算表/.test(g1.logs[0]));
+ok('程式碼註明主題顏色建議', /🎨 自訂主題：顏色 #1F2E4A/.test(code));
+
+// 其他風格
+M.FORM_STYLES.forEach(st => {
+  const r = runGas(M.toGasCode(paperInfo, gitems, [gv[0]], pts, {style:st.id, bannerB64:'QUJD'}));
+  ok('風格「' + st.name + '」可執行', !r.err && r.made.length === 1, r.err);
+  if(r.err) return;
+  const it = r.made[0].items;
+  eq('風格「' + st.name + '」題目數', it.filter(i => /^\d+\. |^第 \d+ 題：/.test(i.title)).length, 4);
+  eq('風格「' + st.name + '」橫幅', it[0].kind === 'image', !!st.banner);
+  eq('風格「' + st.name + '」進度列', r.made[0].opt.setProgressBar, st.progress);
+});
+const gm = runGas(M.toGasCode(paperInfo, gitems, [gv[0]], pts, {style:'game'})).made[0];
+ok('闖關：第 1 關、鼓勵文字、進度列', gm.items.some(i => i.kind === 'page' && i.title === '第 1 關：是非題' && /加油/.test(i.help)) && gm.opt.setProgressBar === true);
+ok('沒給橫幅圖就不放', !gm.items.some(i => i.kind === 'image'));
+const qz = runGas(M.toGasCode(paperInfo, gitems, [gv[0]], pts, {style:'quiz'})).made[0];
+ok('課堂小測驗：大題標題同一頁（不換頁）', qz.items.some(i => i.kind === 'header') && !qz.items.some(i => i.kind === 'page'));
+const pl = runGas(M.toGasCode(paperInfo, gitems, [gv[0]], pts, {style:'plain'})).made[0];
+ok('極簡：沒有分段', !pl.items.some(i => i.kind === 'page' || i.kind === 'header'));
+const many = Array.from({length:12}, (_, i) => M.mkQ({id:'z' + i, type:'s', q:'題' + i, opts:['甲', '乙'], ans:'A'}));
+const ge = runGas(M.toGasCode(paperInfo, many, M.makeVersions(many, 1), pts, {style:'gentle'})).made[0];
+eq('溫和易讀：每 5 題一頁', ge.items.filter(i => i.kind === 'page').map(i => i.title), ['第 1 部分（第 1～5 題）', '第 2 部分（第 6～10 題）', '第 3 部分（第 11～12 題）']);
+const ov = runGas(M.toGasCode(paperInfo, gitems, [gv[0]], pts, {style:'formal', sec:'none', progress:true, confirm:'自訂訊息'})).made[0];
+ok('可覆寫：不分段、進度列、完成訊息', !ov.items.some(i => i.kind === 'page') && ov.opt.setProgressBar === true && ov.opt.setConfirmationMessage === '自訂訊息');
+
+// 自訂欄位與條件
+const fields = [
+  {label:'班級', type:'dd', opts:'甲班\n乙班\n', req:1},
+  {label:'座號', type:'text', req:1, valid:'num'},
+  {label:'Email', type:'text', valid:'email'},
+  {label:'手機', type:'text', valid:'regex', arg:'^09\\d{8}$', help:'09 開頭'},
+  {label:'心得', type:'para', valid:'len', arg:'200'},
+  {label:'日期', type:'date'},
+  {label:'興趣', type:'cb', opts:'閱讀\n運動'},
+  {label:'  ', type:'text'}
+];
+eq('欄位檢查：沒問題的', M.checkFields(fields.slice(0, 7)), []);
+ok('欄位檢查：選項不足、重複、數字開頭、規則錯', M.checkFields([{label:'A', type:'mc', opts:'只有一個'}, {label:'A'}, {label:'1. 班級'}, {label:'R', valid:'regex', arg:'('}]).length === 4);
+const fr = runGas(M.toGasCode(paperInfo, gitems, [gv[0]], pts, {style:'plain', fields:fields, once:true, edit:true, askId:false})).made[0];
+const fi = fr.items;
+eq('沒勾學號就不放；自訂欄位依序（空名稱略過）', fi.slice(0, 8).map(i => i.title), ['姓名', '班級', '座號', 'Email', '手機', '心得', '日期', '興趣']);
+eq('下拉選單選項', [fi[1].kind, fi[1].values, fi[1].req], ['dd', ['甲班', '乙班'], true]);
+eq('數字驗證', fi[2].valid, [['requireNumber'], ['setHelpText', '請填數字']]);
+eq('Email 驗證', fi[3].valid[0], ['requireTextIsEmail']);
+eq('格式驗證＋說明', [fi[4].valid[0], fi[4].help], [['requireTextMatchesPattern', '^09\\d{8}$'], '09 開頭']);
+eq('段落字數上限', [fi[5].kind, fi[5].valid[0]], ['para', ['requireTextLengthLessThanOrEqualTo', 200]]);
+eq('日期、核取方塊', [fi[6].kind, fi[7].kind, fi[7].values], ['date', 'cb', ['閱讀', '運動']]);
+eq('條件：每人限填一次、可修改答案', [fr.opt.setLimitOneResponsePerUser, fr.opt.setAllowResponseEdits], [true, true]);
+// 回覆檔：自訂欄位不會被當成題目；第 N 題：格式也認得
+const fvv = M.makeVersions(gitems, 1);
+const cnCode = M.gasData(paperInfo, gitems, fvv, pts, {style:'formal'});
+ok('題目標題都以題號開頭（回覆檔才對得回去）', cnCode.forms[0].sections.every(s => s.items.every(q => /^\d+\. /.test(q.title))));
 
 // ── 作答解析 ──
 const pv = M.makeVersions(paper, 2, {seed:5});
