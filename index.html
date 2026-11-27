@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>講義出題試卷工坊</title>
+<meta name="description" content="多份講義 PDF→出題審題→A/B 卷試卷→Google 表單→試題分析">
+<meta name="theme-color" content="#3B2A1E">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* 範本產生的起始配色（kraft）。畫風要依工具主題重新設計，不要直接沿用。 */
+:root{
+  --bg:#F2EADB; --paper:#FFFCF5; --ink:#2E2219; --sub:#7A6652; --line:#DCCBAE;
+  --main:#3B2A1E; --on-main:#FFF4DF; --accent:#255A5E;
+  --ok:#3B7A47; --warn:#C08514; --bad:#B4322A;
+  --mono:'JetBrains Mono','Consolas',monospace;
+  --serif:'Noto Serif TC','PMingLiU',serif;
+  --mq:0px; color-scheme:light;
+}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+html[data-fsize="xl"]{font-size:19px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Noto Sans TC','Microsoft JhengHei','PingFang TC',sans-serif;font-weight:500;line-height:1.6;padding-top:var(--mq)}
+body.has-marquee{--mq:34px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--accent);font-weight:700}
+:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+h1,h2,h3{margin:0;line-height:1.3}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+/* 不可拿掉：所有 hidden 切換都靠這行 */
+[hidden]{display:none!important}
+
+/* 跑馬燈（必備、不可關、滑鼠移入暫停） */
+#marqueeBar{position:fixed;top:0;left:0;right:0;height:34px;background:var(--main);z-index:60;overflow:hidden;display:none;align-items:center}
+#marqueeBar.show{display:flex}
+#marqueeTrack{display:inline-block;white-space:nowrap;padding-left:100%;font-size:15px;font-weight:700;color:var(--on-main);animation:marquee-scroll 30s linear infinite}
+#marqueeBar:hover #marqueeTrack{animation-play-state:paused}
+@keyframes marquee-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+#app{max-width:72rem;margin:0 auto;padding:.9rem 1rem calc(2rem + env(safe-area-inset-bottom))}
+.bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.bar h1{flex:1 1 15rem;font-family:var(--serif);font-size:1.7rem;letter-spacing:.05em;color:var(--main)}
+.bar h1 .seal{display:inline-grid;place-items:center;width:2.1rem;height:2.1rem;border-radius:.5rem;background:var(--main);color:var(--on-main);font-size:1.05rem;margin-right:.45rem;vertical-align:.15rem}
+.bar h1 small{display:block;font-family:'Noto Sans TC',sans-serif;font-size:.82rem;font-weight:500;letter-spacing:0;color:var(--sub);margin-top:.15rem}
+.ibtn{min-height:2.6rem;padding:0 .8rem;border:1.5px solid var(--line);border-radius:.55rem;background:var(--paper);font-weight:700;font-size:.92rem;display:inline-flex;align-items:center;gap:.3rem;text-decoration:none;color:var(--ink)}
+.ibtn:hover{border-color:var(--main)}
+.warn-line{margin:.45rem 0 0;font-size:.82rem;color:var(--sub)}
+.warn-line button{background:none;border:0;padding:0;color:var(--bad);font-weight:700;text-decoration:underline;font-size:inherit}
+
+.tabs{display:flex;gap:.25rem;margin-top:1.2rem;border-bottom:3px solid var(--main);flex-wrap:wrap}
+.tabs button{border:0;border-radius:.6rem .6rem 0 0;background:var(--line);color:var(--sub);font-weight:700;padding:.45rem .95rem;min-height:2.7rem}
+.tabs button[aria-selected="true"]{background:var(--main);color:var(--on-main)}
+.card{background:var(--paper);border:1.5px solid var(--line);border-radius:.9rem;padding:.9rem 1rem;margin-top:.8rem}
+.card h3{font-family:var(--serif);font-size:1.15rem;color:var(--main);margin-bottom:.3rem}
+.small{font-size:.84rem;color:var(--sub)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(12rem,100%),1fr));gap:.6rem .8rem}
+.row>*{min-width:0}
+.fld{display:block;font-weight:700;font-size:.88rem}
+.fld small{display:block;font-weight:500;color:var(--sub);font-size:.76rem;line-height:1.4;margin-top:.1rem}
+.fld input,.fld select,.fld textarea{display:block;width:100%;min-height:2.6rem;margin-top:.15rem;border:1.5px solid var(--line);border-radius:.5rem;padding:.2rem .55rem;background:#fff;font-weight:500}
+.fld input[type=number]{font-family:var(--mono);text-align:right}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.3rem;min-height:2.7rem;border:0;border-radius:.6rem;background:var(--accent);color:#fff;font-weight:900;padding:.2rem 1.1rem;text-decoration:none}
+.btn.alt{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.btn.red{background:var(--bad)}
+.btns{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.7rem}
+.result{margin-top:.7rem;background:var(--main);color:var(--on-main);border-radius:.8rem;padding:.8rem 1rem}
+.result b{font-family:var(--mono);font-size:1.6rem}
+
+#modal{position:fixed;inset:0;background:rgba(20,20,20,.55);z-index:80;display:none;align-items:center;justify-content:center;padding:1rem}
+#modal.show{display:flex}
+#modalBox{background:var(--bg);width:100%;max-width:36rem;max-height:calc(100dvh - 2rem);overflow:auto;border-radius:1rem;padding:1rem 1.1rem}
+#modalBox h2{font-family:var(--serif);font-size:1.3rem;color:var(--main);margin-bottom:.4rem}
+#modalBox ul{padding-left:1.2em;margin:.3rem 0}
+#modalBox li{margin:.2rem 0}
+/* ⚙ 常用設定：收合式區塊 */
+.set-sec{background:#fff;border:1.5px solid var(--line);border-radius:.6rem;margin-bottom:.45rem}
+.set-sec>summary{list-style:none;cursor:pointer;display:flex;gap:.5rem;align-items:center;padding:.55rem .75rem;font-weight:700;min-height:2.9rem}
+.set-sec>summary::-webkit-details-marker{display:none}
+.set-sec>summary::after{content:'▸';transition:transform .2s}
+.set-sec[open]>summary::after{transform:rotate(90deg)}
+.set-sec .sst{flex:1 1 0}
+.set-sec .ssv{font-weight:500;font-size:.78rem;color:var(--sub);text-align:right}
+.set-body{padding:0 .75rem .75rem}
+.vstack{display:grid;gap:.45rem;margin-top:.5rem}
+.toast{position:fixed;left:50%;bottom:calc(1.2rem + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:.55rem 1rem;border-radius:.7rem;z-index:90;font-weight:700;max-width:calc(100vw - 2rem)}
+.foot{text-align:center;font-size:.82rem;color:var(--sub);margin-top:2rem}
+.foot a{margin:0 .3rem}
+.print-head,#pdfWatermark{display:none}
+
+/* 登入序號閘門（比照課程招生海報產生器／訓練證書產生器） */
+#entryGate{position:fixed;inset:0;z-index:3200;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;background:var(--main)}
+#entryGate.hidden{display:none}
+body:has(#entryGate:not(.hidden)){overflow:hidden}
+.gate-box{background:var(--paper);color:var(--ink);border-radius:.8rem;box-shadow:0 18px 40px rgba(0,0,0,.4);padding:1.6rem 1.3rem 1.2rem;width:470px;max-width:calc(100% - 16px);text-align:center;margin:auto}
+.gate-box h2{font-family:var(--serif);font-size:1.45rem;color:var(--main);margin-bottom:.3rem}
+.gate-desc{font-size:.9rem;color:var(--sub);margin:.3rem 0 .7rem}
+.gate-row{display:flex;gap:.35rem;margin:.5rem 0}
+#entryGateSerial{flex:1 1 0;min-width:0;min-height:3rem;font-weight:700;text-align:center;padding:.3rem .5rem;border:2px solid var(--line);border-radius:.5rem;background:#fff;color:#111;letter-spacing:.06em}
+#btnEntryGateToggle{flex:none;font-size:.8rem;padding:0 .6rem}
+#btnEntryGateConfirm{width:100%;min-height:3rem;font-size:1.05rem}
+.gate-foot{font-size:.76rem;color:var(--sub);margin:.8rem 0 0}
+.gate-free{margin-top:.9rem;padding:.7rem .75rem;border:2px dashed var(--warn);border-radius:.5rem;background:#FFFBE0}
+.gate-free .gf-t{font-weight:900;font-size:.95rem}
+.gate-free .gf-code{display:inline-block;margin:.35rem 0;font:900 1.25rem/1.2 var(--mono);letter-spacing:.08em;background:#fff;border:1.5px solid var(--line);border-radius:.4rem;padding:.25rem .7rem;user-select:all;color:#111}
+.lic{display:inline-block;font-size:.8rem;font-weight:700;padding:.2rem .6rem;border-radius:.5rem;border:2px solid var(--line);margin-top:.55rem;overflow-wrap:anywhere}
+.lic.ok{color:#14632F;border-color:#14632F;background:#E6F4E9}
+.lic.bad{color:#A32019;border-color:#A32019;background:#FBE9E7}
+#entryGateHeadcount:empty{display:none}
+.lictop small{font-size:.75rem;color:var(--sub);margin-left:.1rem}
+.lictop.soon{border-color:var(--bad);color:var(--bad)}
+@media print{#entryGate{display:none!important}}
+@media (max-width:600px){.bar h1{font-size:1.4rem}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}#marqueeTrack{animation-duration:90s!important}}
+@media print{
+  @page{size:A4;margin:12mm}
+  html{font-size:11px}
+  body{background:#fff;padding:0}
+  #marqueeBar,.noprint,.tabs,.toast,#modal,.foot,.bar,.warn-line,.btns{display:none!important}
+  #app{max-width:none;padding:0}
+  .print-head{display:block;margin-bottom:.5rem}
+  .print-head h1{font-family:var(--serif);font-size:1.6rem;color:var(--main)}
+  .panel{display:block!important}
+  .card,.result{break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #pdfWatermark{display:flex!important;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;pointer-events:none}
+  #pdfWatermark img{width:42%;min-width:200px;max-width:380px;opacity:.11}
+}
+</style>
+</head>
+<body>
+<div id="entryGate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+  <div class="gate-box">
+    <h2 id="gateTitle">講義出題試卷工坊</h2>
+    <p class="gate-desc">請輸入登入序號，再按「確認」。這台裝置會記住，之後不用再輸入。登入後畫面上方會顯示序號的到期日。</p>
+    <div class="gate-row">
+      <input type="password" id="entryGateSerial" placeholder="請輸入登入序號" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="登入序號">
+      <button class="btn alt" type="button" id="btnEntryGateToggle" aria-pressed="false" aria-label="顯示序號">👁 顯示</button>
+    </div>
+    <button class="btn" type="button" id="btnEntryGateConfirm">確認</button>
+    <span id="entryGateStatus" class="lic" role="status">尚未驗證</span>
+    <div><span id="entryGateHeadcount" class="lic" aria-live="polite"></span></div>
+    <div class="gate-free" id="gateFree">
+      <div class="gf-t">🎁 免費試用序號</div>
+      <div class="gf-code" id="gateFreeCode"></div>
+      <div class="btns" style="justify-content:center;margin-top:.35rem"><button class="btn" type="button" id="btnGateFree">用免費序號登入</button><button class="btn alt" type="button" id="btnGateFreeCopy">複製序號</button></div>
+    </div>
+    <p class="gate-foot">沒有序號？請洽課程講師或主辦單位｜<a href="manual.html" target="_blank" rel="noopener">📖 操作手冊</a></p>
+  </div>
+</div>
+<div id="marqueeBar"><div id="marqueeTrack"></div></div>
+<main id="app"></main>
+<div id="modal" role="dialog" aria-modal="true" aria-label="對話框"><div id="modalBox"></div></div>
+<noscript>這個工具需要開啟 JavaScript 才能使用。</noscript>
+<script src="data.js"></script>
+<script src="watermark.js"></script>
+<script src="ai.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

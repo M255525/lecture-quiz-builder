@@ -1,0 +1,16 @@
+{
+  "name": "講義出題試卷工坊",
+  "short_name": "講義出題試卷",
+  "description": "多份講義 PDF→出題審題→A/B 卷試卷→Google 表單→試題分析",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F2EADB",
+  "theme_color": "#3B2A1E",
+  "lang": "zh-TW",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
