@@ -58,7 +58,13 @@ function doGet(e) {
 function getLicenseSheet_(sheetName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   // 固定分頁：找不到就回 null（呼叫端回 server_error），絕不退回第一個分頁——那是別的工具的序號表
-  return ss.getSheetByName(sheetName || SHEET_NAME) || null;
+  const want = sheetName || SHEET_NAME;
+  const exact = ss.getSheetByName(want);
+  if (exact) return exact;
+  // 分頁名稱前後多了空白或全形字時也找得到（只比對去空白＋NFKC 後完全相同的名稱，不會退回別的分頁）
+  const key = function (n) { return String(n).normalize("NFKC").replace(/\s+/g, ""); };
+  const hit = ss.getSheets().filter(function (sh) { return key(sh.getName()) === key(want); });
+  return hit.length === 1 ? hit[0] : null;
 }
 
 // 把「已登入裝置」欄的字串解析成 [{id, ts}, ...]；舊格式（2026-09-23 當天稍早的版本，
